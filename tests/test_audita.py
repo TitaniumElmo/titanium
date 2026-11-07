@@ -2,9 +2,9 @@ from datetime import date
 
 import pytest
 
-from heitor.contrato import Linha
+from heitor.contrato import Achado, Linha
 from heitor.dados.caepi import CAMINHO
-from heitor.dados.regras import audita_funcionario, audita_linha
+from heitor.dados.regras import audita_fora_da_planilha, audita_funcionario, audita_linha
 
 HOJE = date(2026, 11, 7)
 
@@ -167,3 +167,85 @@ def test_cancelado_com_validade_futura_gera_so_cancelado(monkeypatch):
 def test_validade_no_proprio_dia_nao_vence(monkeypatch):
     monkeypatch.setattr("heitor.dados.regras.consulta_ca", _fake_ca("VÁLIDO", "2026-11-01"))
     assert audita_linha(L(1, "luva", date(2026, 11, 1), "1"), "armador") == []
+
+
+def _dict_linha(**extra):
+    base = {"funcionario_id": "0302", "nome": "Marcos Alves", "funcao": "armador", "linha": 3, "data": "2026-11-01",
+            "epi": "luva", "ca": "1169", "origem": "t", "assinatura": True}
+    return base | extra
+
+
+@precisa_base
+def test_assinatura_tipo_duvidosa_vira_risco_prova_citando_o_texto():
+    esperado = {"texto": "texto 'Marcos'", "marca": "marca 'X'", "iniciais": "iniciais 'M.A.'",
+                "outro_nome": "assinado 'Pedro'", "ilegivel": "ilegível 'rabisco'"}
+    for tipo, trecho in esperado.items():
+        texto = trecho.split("'")[1]
+        a = audita_linha(_dict_linha(assinatura=False, assinatura_tipo=tipo, assinatura_texto=texto), "armador")
+        assert [x["regra"] for x in a] == ["assinatura_ausente"], tipo
+        assert (a[0]["gravidade"], a[0]["tipo"]) == ("risco", "prova"), tipo
+        assert f"'{texto}'" in a[0]["evidencia"] and "conferir" in a[0]["evidencia"], tipo
+
+
+@precisa_base
+def test_assinatura_tipo_duvidosa_nunca_irregular_mesmo_com_confianca_alta():
+    a = audita_linha(_dict_linha(assinatura=False, confianca={"assinatura": 0.95},
+                                 assinatura_tipo="texto", assinatura_texto="ok"), "armador")
+    assert (a[0]["gravidade"], a[0]["tipo"]) == ("risco", "prova")
+
+
+@precisa_base
+def test_nome_confere_nao_gera_achado_de_assinatura():
+    assert audita_linha(_dict_linha(assinatura=False, assinatura_tipo="nome_confere"), "armador") == []
+
+
+@precisa_base
+def test_vazio_segue_a_regra_atual():
+    a = audita_linha(_dict_linha(assinatura=False, assinatura_tipo="vazio"), "armador")
+    assert (a[0]["regra"], a[0]["gravidade"], a[0]["tipo"]) == ("assinatura_ausente", "irregular", "passivo")
+
+
+@precisa_base
+def test_na_ficha_false_gera_so_entrega_sem_ficha():
+    for extra in ({"na_ficha": False, "assinatura": None}, {"assinatura_tipo": "sem_linha_na_ficha", "assinatura": None},
+                  {"na_ficha": False, "assinatura": False, "assinatura_tipo": "texto"}):
+        a = audita_linha(_dict_linha(**extra), "armador")
+        assert [x["regra"] for x in a] == ["entrega_sem_ficha"], extra
+        assert (a[0]["gravidade"], a[0]["tipo"]) == ("risco", "prova")
+
+
+@precisa_base
+def test_na_ficha_none_nao_gera_achado_novo():
+    assert audita_linha(_dict_linha(na_ficha=None), "armador") == []
+    a = audita_linha(_dict_linha(na_ficha=None, assinatura=None), "armador")
+    assert [x["regra"] for x in a] == ["assinatura_ausente"] and a[0]["gravidade"] == "risco"
+
+
+@precisa_base
+def test_ca_continua_independente_da_assinatura():
+    a = audita_linha(_dict_linha(na_ficha=False, ca="99999999"), "armador")
+    assert sorted(x["regra"] for x in a) == ["ca_nao_encontrado", "entrega_sem_ficha"]
+    a = audita_linha(_dict_linha(assinatura_tipo="outro_nome", assinatura_texto="Pedro", ca="25"), "armador")
+    assert sorted(x["regra"] for x in a) == ["assinatura_ausente", "ca_vencido"]
+
+
+@precisa_base
+def test_linha_pura_inalterada_e_devolve_achado():
+    a = audita_linha(_assina(False, 0.95), "armador")
+    assert isinstance(a[0], Achado) and (a[0].gravidade, a[0].tipo) == ("irregular", "passivo")
+
+
+def test_fora_da_planilha_com_dois_itens():
+    itens = [{"data": "2026-10-15", "epi": "cinto de segurança"}, {"data": "2026-10-20", "epi": "luva"}]
+    a = audita_fora_da_planilha(itens, "0302")
+    assert [x["regra"] for x in a] == ["ficha_sem_planilha"] * 2
+    assert all(isinstance(x, dict) and x["linha"] is None and x["funcionario_id"] == "0302" for x in a)
+    assert all((x["gravidade"], x["tipo"]) == ("risco", "corrigivel") for x in a)
+    assert a[0]["evidencia"] == ("A ficha de papel mostra cinto de segurança em 15/10/2026 que não está na planilha "
+                                 "de controle; leitura aberta do papel pode errar; conferir")
+    assert len({x["id"] for x in a}) == 2
+
+
+def test_fora_da_planilha_vazia_e_dict_unico():
+    assert audita_fora_da_planilha([], "0302") == []
+    assert len(audita_fora_da_planilha({"data": "2026-10-15", "epi": "luva"}, "0302")) == 1
