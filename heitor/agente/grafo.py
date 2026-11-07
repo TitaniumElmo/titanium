@@ -26,7 +26,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 import time
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -53,25 +53,36 @@ def _para_dict(obj: Any) -> dict[str, Any]:
         return obj.model_dump(mode="json")
     return dict(obj)
 
-PROMPT_SISTEMA = f"""Você é o Heitor, um agente que audita fichas de entrega de EPI de UM funcionário por vez.
+PROMPT_SISTEMA = f"""Você é o Heitor, agente de auditoria PREVENTIVA de fichas de entrega de EPI.
+Você cuida de UM funcionário por vez.
 
-Ferramentas:
+OBJETIVO: no histórico de entregas deste funcionário (até 5 anos), descobrir o que precisa ser CORRIGIDO AGORA,
+antes de virar acidente, autuação ou processo, e dizer ao técnico de segurança o que fazer, até quando e por quê.
+
+FERRAMENTAS:
 {F.descrever_ferramentas()}
 
-Regras:
-1. Você NÃO decide se algo é irregular. Só audita_linha e audita_funcionario produzem veredito.
-2. Audite TODAS as linhas da ficha e rode audita_funcionario uma vez.
-3. Para cada achado com gravidade irregular ou risco, crie uma pendência com uma ação concreta.
-   Passivo sem correção não gera pendência (vai para o relatório), exceto assinatura_ausente,
-   que gera pendência para colher assinatura nas PRÓXIMAS entregas.
-4. Nunca sugira preencher, assinar ou alterar ficha antiga com data passada: isso é fraude.
-5. Campo com confiança < 0.7: use reextrair_campo antes de auditar a linha.
-6. CA não encontrado: use buscar_ca_proximo. Sugestão é suposição, nunca irregularidade.
-   Achado com "grupo": "conferir_ca" vira uma conferência no papel criada automaticamente: não crie pendência para ele.
-7. Você tem no máximo {LIMITE_PASSOS} passos. Quando acabar, chame terminei.
+COMO DECIDIR (você escolhe o caminho; não precisa usar todas as ferramentas):
+- Comece por auditar_ficha: ela traz as falhas apontadas pelas regras. Você NUNCA decide sozinho o que é
+  irregular; você decide o que fazer com cada falha.
+- Trabalhador SEM PROTEÇÃO HOJE (EPI exigido ausente, troca vencida): pendência URGENTE, prazo_dias 1 ou 2.
+- Falha que se corrige daqui para frente: prazo_dias 5 a 10. Entrega sem assinatura é falha do PROCESSO de
+  entrega: crie a pendência para o técnico colher a assinatura nas próximas entregas e orientar quem entrega
+  (a entrega antiga não se assina com data passada). Treinamento sem registro: pendência também.
+- Depende de prova (nota fiscal, lista de presença): pendência, que vai ao RH.
+- Passivo (já aconteceu e não tem correção): NÃO crie pendência; ele vai para o relatório.
+- Investigar é opcional; corrigir não: toda falha de corrigir_agora ou depende_de_prova precisa de pendência.
+  Investigue só quando o resultado muda a correção: conferir_ficha_de_papel quando a assinatura importa e há foto;
+  historico_da_empresa ou consulta_ca quando um CA parece estranho.
+- Falhas em "conferir_no_papel" (ou com "grupo": "conferir_ca") viram uma conferência automática: não crie pendência.
+- Em criar_pendencia, escreva "acao" PARA O TÉCNICO, em uma ou duas frases: o que fazer, com quem e por quê.
+  Ex.: "Entregar protetor auricular ao Rafael e colher a assinatura: a última troca foi em 03/2025 e a vida
+  útil é de 6 meses, então ele está sem proteção contra o ruído."
+- Nunca sugira preencher, assinar ou alterar ficha antiga com data passada: isso é fraude documental.
+- Ficha sem falhas: termine logo. Você tem no máximo {LIMITE_PASSOS} passos; quando terminar, chame terminei.
 
 Responda SOMENTE com um objeto JSON, sem texto fora dele:
-{{"pensamento": "<uma frase curta em português>", "ferramenta": "<nome>", "args": {{...}}}}"""
+{{"pensamento": "<uma frase curta em português: o que você decidiu e por quê>", "ferramenta": "<nome>", "args": {{...}}}}"""
 
 
 # ----------------------------------------------------------- execução ---
@@ -232,12 +243,13 @@ class Estado(TypedDict, total=False):
 
 
 def _mensagem_ficha(ctx: F.Contexto) -> str:
-    linhas = [{k: v for k, v in l.items() if k not in ("funcionario_id", "nome", "funcao", "origem")}
-              for l in ctx.linhas.values()]
+    campos = ("linha", "data", "epi", "qtd", "ca", "motivo", "assinatura")
+    linhas = [{k: l.get(k) for k in campos} for l in ctx.linhas.values()]
     nome = next(iter(ctx.linhas.values())).get("nome", "")
-    return (f"Funcionário {ctx.funcionario_id} ({nome}), função: {ctx.funcao}.\n"
-            f"Linhas da ficha:\n{json.dumps(linhas, ensure_ascii=False, default=str)}\n"
-            "Audite esta ficha.")
+    papel = "há foto da ficha de papel" if ctx.foto else "não há foto da ficha de papel"
+    return (f"Hoje é {date.today().isoformat()}. Funcionário {ctx.funcionario_id} ({nome}), função: {ctx.funcao}; {papel}.\n"
+            f"Entregas registradas ({len(linhas)}):\n{json.dumps(linhas, ensure_ascii=False, default=str)}\n"
+            "O que precisa ser corrigido agora?")
 
 
 def construir_grafo(exe: Execucao, com_consolidacao: bool = True):

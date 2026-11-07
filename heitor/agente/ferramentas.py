@@ -172,12 +172,25 @@ GRUPO_CONFERIR_CA = "conferir_ca"
 
 
 def _registrar(ctx: Contexto, achados: list[Achado]) -> list[Achado]:
+    """Guarda os achados das regras. Achado repetido (o agente reauditou a mesma linha ou ficha) reaproveita
+    o que já existe, para não gerar uma segunda pendência para a mesma falha."""
+    existentes = {_chave(a): a for a in ctx.achados_do_funcionario()}
+    registrados = []
     for a in achados:
         a.setdefault("funcionario_id", ctx.funcionario_id)
         a.setdefault("auditoria_id", ctx.auditoria_id)
+        if _chave(a) in existentes:
+            registrados.append(existentes[_chave(a)])
+            continue
         _marcar_conferencia_ca(ctx, a)
         ctx.achados[a["id"]] = a
-    return achados
+        existentes[_chave(a)] = a
+        registrados.append(a)
+    return registrados
+
+
+def _chave(a: Achado) -> tuple:
+    return (a.get("funcionario_id"), a.get("linha"), a.get("regra"), a.get("evidencia"))
 
 
 def _marcar_conferencia_ca(ctx: Contexto, a: Achado) -> None:
@@ -307,7 +320,9 @@ def _t_auditar_ficha(ctx: Contexto, args: dict) -> Resultado:
     return Resultado({
         "linhas_auditadas": len(ctx.linhas), "periodo": f"{datas[0]} a {datas[-1]}" if datas else None,
         "sem_falhas": not falhas, **{k: v for k, v in grupos.items() if v},
-        "observacao": "conferir_no_papel vira uma conferência automática no fim; não crie pendência para esses",
+        # Só quando há itens: o aviso sempre presente fez o LLM ignorar falhas de outros grupos.
+        **({"observacao": "os itens de conferir_no_papel viram uma conferência automática no fim; "
+                          "os de corrigir_agora e depende_de_prova continuam com você"} if grupos["conferir_no_papel"] else {}),
     })
 
 
