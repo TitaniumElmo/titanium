@@ -39,6 +39,7 @@ from heitor.contrato import Evento
 LIMITE_PASSOS = int(os.getenv("HEITOR_LIMITE_PASSOS", "12"))  # por funcionário
 TEMPO_MAX_S = float(os.getenv("HEITOR_TEMPO_MAX_S", "600"))  # auditoria inteira
 MAX_ERROS_FORMATO = 2  # respostas sem JSON válido antes de a política assumir o passo
+FALHAS_PARA_DESISTIR = 2  # funcionários seguidos com o LLM fora do ar antes de parar de tentar
 EVENTOS_DE_ERRO = {"modelo_indisponivel", "resposta_invalida"}
 
 
@@ -101,6 +102,8 @@ class Execucao:
         self.ctx: F.Contexto | None = None
         self.cliente: ClienteLLM | None = None
         self.modo = "deterministico"
+        self.falhas_seguidas = 0
+        self.modo_por_funcionario: dict[str, str] = {}
         if llm_ligado():
             try:
                 self.cliente = ClienteLLM()
@@ -169,6 +172,7 @@ def politica_deterministica(exe: Execucao) -> dict[str, Any]:
 # -------------------------------------------------------------- grafo ---
 
 class Estado(TypedDict, total=False):
+    degradado: bool  # este funcionário segue sem LLM
     fila: list[str]
     atual: Optional[str]
     mensagens: list[dict[str, str]]
@@ -194,8 +198,11 @@ def construir_grafo(exe: Execucao):
         if not fila:
             return {"atual": None}
         ctx = exe.novo_contexto(fila[0])
+        # Disjuntor: depois de 2 funcionários seguidos sem LLM, para de tentar (cada tentativa custa até ~30 s).
+        degradado = exe.cliente is None or exe.falhas_seguidas >= FALHAS_PARA_DESISTIR
+        exe.modo_por_funcionario[ctx.funcionario_id] = "deterministico" if degradado else "llm"
         return {"fila": fila[1:], "atual": ctx.funcionario_id, "passos_episodio": 0, "erros_formato": 0,
-                "acao": None, "terminou": False,
+                "acao": None, "terminou": False, "degradado": degradado,
                 "mensagens": [{"role": "system", "content": PROMPT_SISTEMA},
                               {"role": "user", "content": _mensagem_ficha(ctx)}]}
 
@@ -206,14 +213,21 @@ def construir_grafo(exe: Execucao):
             motivo = "limite de passos" if passos >= LIMITE_PASSOS else "tempo total esgotado"
             return {"acao": {"ferramenta": "terminei", "args": {"resumo": motivo},
                              "pensamento": f"guarda-corpo: {motivo}"}}
-        if exe.modo != "llm" or state.get("erros_formato", 0) >= MAX_ERROS_FORMATO:
+        if state.get("degradado") or state.get("erros_formato", 0) >= MAX_ERROS_FORMATO:
             return {"acao": politica_deterministica(exe), "erros_formato": 0}
         try:
             resp = exe.cliente.completar(mensagens)  # type: ignore[union-attr]
         except LLMIndisponivel as e:
-            exe.modo = "deterministico"
-            exe.evento("modelo_indisponivel", {}, {"erro": str(e)[:200], "agora": "política determinística"})
-            return {"acao": politica_deterministica(exe)}
+            # Modo degradado só neste funcionário; o próximo tenta o LLM de novo (queda passageira não estraga tudo).
+            exe.falhas_seguidas += 1
+            exe.modo_por_funcionario[exe.ctx.funcionario_id] = "degradado"  # type: ignore[union-attr]
+            desiste = exe.falhas_seguidas >= FALHAS_PARA_DESISTIR
+            exe.evento("modelo_indisponivel", {}, {
+                "erro": str(e)[:200],
+                "agora": "LLM indisponível: este funcionário segue com a política determinística (modo degradado)"
+                         + ("; os próximos também, depois de falhas seguidas" if desiste else "; o próximo tenta o LLM de novo")})
+            return {"acao": politica_deterministica(exe), "degradado": True}
+        exe.falhas_seguidas = 0
         exe.custo_usd += resp.custo_usd
         try:
             obj = extrair_json(resp.texto)
@@ -284,7 +298,8 @@ def construir_grafo(exe: Execucao):
             exe.evento("gerar_relatorio", {"achados": len(achados)}, {"itens": len(relatorio.get("itens", []))})
         cont = {g: sum(1 for a in achados if a.get("gravidade") == g) for g in ("irregular", "risco")}
         return {"resultado": {
-            "auditoria_id": exe.auditoria_id, "status": "concluida", "modo": exe.modo,
+            "auditoria_id": exe.auditoria_id, "status": "concluida", "modo": _modo_final(exe),
+            "modo_por_funcionario": exe.modo_por_funcionario,
             "contagem": cont, "achados": achados, "pendencias": exe.pendencias, "exposicao": exposicao,
             "relatorio": relatorio, "passos": exe.passo, "custo_usd": round(exe.custo_usd, 6),
             "duracao_s": round(time.monotonic() - exe.inicio, 1), "stubs": F.usando_stubs(),
@@ -301,6 +316,14 @@ def construir_grafo(exe: Execucao):
     g.add_edge("fim_episodio", "proximo_funcionario")
     g.add_edge("consolidar", END)
     return g.compile()
+
+
+def _modo_final(exe: Execucao) -> str:
+    """llm: todos com LLM; misto: algum em modo degradado; deterministico: nenhum com LLM."""
+    modos = set(exe.modo_por_funcionario.values())
+    if not modos or modos == {"deterministico"}:
+        return "deterministico"
+    return "llm" if modos == {"llm"} else "misto"
 
 
 def _data_do_achado(exe: Execucao, a: Achado) -> str | None:

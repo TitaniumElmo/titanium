@@ -141,7 +141,7 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
     """Lê a foto e devolve {"linhas": [LinhaDict], "cabecalho": {...}, "custo_usd": float, "modelo": str}."""
     caminho = Path(arquivo).resolve()
     _CAMINHOS[caminho.name] = caminho
-    cliente = ClienteLLM(modelo=MODELO_VISAO, reserva=MODELO_VISAO_RESERVA)
+    cliente = ClienteLLM(modelo=MODELO_VISAO, reserva=MODELO_VISAO_RESERVA, timeout_s=90, extra=False)
     b64 = _imagem_b64(caminho)
 
     bruto, custo = _perguntar(cliente, b64, PROMPT_LEITURA, 1500)
@@ -219,7 +219,7 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
 
 def reextrair_assinatura(arquivo: str | Path, linha: LinhaDict) -> dict[str, Any] | None:
     """Nova tentativa na assinatura: pergunta B de novo, com a foto em resolução maior."""
-    cliente = ClienteLLM(modelo=MODELO_VISAO, reserva=MODELO_VISAO_RESERVA)
+    cliente = ClienteLLM(modelo=MODELO_VISAO, reserva=MODELO_VISAO_RESERVA, timeout_s=90, extra=False)
     obj, _ = _perguntar(cliente, _imagem_b64(Path(arquivo), lado_max=2400), PROMPT_ASSINATURAS, 800)
     lista = [x for x in (obj.get("linhas") or []) if isinstance(x, dict)]
     mesmas = [x for x in lista if normalizar_data(x.get("data")) == linha.get("data")]

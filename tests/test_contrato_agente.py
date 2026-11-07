@@ -156,6 +156,46 @@ def test_conferir_e_auditar_com_ficha_de_papel():
     assert [e.passo for e in eventos] == list(range(1, len(eventos) + 1))
 
 
+def test_disjuntor_do_llm(monkeypatch):
+    """LLM fora do ar: o funcionário segue em modo degradado e o próximo tenta de novo;
+    depois de 2 funcionários seguidos com falha, o agente para de tentar."""
+    import json as _json
+
+    from heitor.agente import grafo
+    from heitor.agente.llm import LLMIndisponivel, RespostaLLM
+
+    def rodar(falhas: list[bool]) -> dict:
+        roteiro = iter(falhas)
+
+        class LLMFalso:
+            def __init__(self, *a, **k):
+                self.atual = None
+
+            def completar(self, mensagens, max_tokens=400):
+                if mensagens is not self.atual:  # primeira chamada de cada funcionário consome o roteiro
+                    self.atual, self.cai = mensagens, next(roteiro, False)
+                if self.cai:
+                    raise LLMIndisponivel("timeout")
+                return RespostaLLM(_json.dumps({"pensamento": "ok", "ferramenta": "terminei", "args": {}}),
+                                   0.0, 0, 0, "falso", 0.0)
+
+        monkeypatch.setenv("HEITOR_LLM", "on")
+        monkeypatch.setattr(grafo, "ClienteLLM", LLMFalso)
+        linhas = [dict(l) for l in LINHAS]  # 3 funcionários
+        with stubs_de_dados():
+            return grafo.rodar_auditoria("au-disjuntor", linhas)
+
+    # Cai no 1º funcionário e volta: só o 1º fica degradado.
+    r = rodar([True, False, False])
+    assert list(r["modo_por_funcionario"].values()) == ["degradado", "llm", "llm"], r["modo_por_funcionario"]
+    assert r["modo"] == "misto"
+    # Cai no 1º e no 2º: o 3º nem tenta (disjuntor aberto).
+    r = rodar([True, True, False])
+    assert list(r["modo_por_funcionario"].values()) == ["degradado", "degradado", "deterministico"]
+    # Em todos os casos a auditoria termina com os mesmos achados (os guarda-corpos completam o trabalho).
+    assert r["contagem"] == {"irregular": 4, "risco": 3}
+
+
 if __name__ == "__main__":
     for nome, fn in list(globals().items()):
         if nome.startswith("test_"):
