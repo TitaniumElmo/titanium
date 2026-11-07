@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Protocol
@@ -100,6 +101,14 @@ class PastaDrive:
         self.pasta_id = pasta_id
         self.conta = cred.service_account_email
         self.descricao = f"pasta do Drive {pasta_id}"
+        # Planilha do Google: id -> (versão, quando essa versão foi vista, md5 do CSV, CSV)
+        self._planilhas: dict[str, tuple[str, float, str, bytes]] = {}
+
+    # Depois que a versão de uma planilha muda, o CSV exportado pode demorar a
+    # refletir a edição (visto no teste real: a versão mudou e a exportação seguiu
+    # antiga por ~1 min). Durante esta janela a planilha é exportada a cada
+    # listagem e a assinatura é o conteúdo; depois, reaproveita o último conteúdo.
+    JANELA_PLANILHA_S = 120.0
 
     def _get(self, url: str, **params):
         r = self._sessao.get(url, params=params, timeout=self._timeout)
@@ -125,11 +134,26 @@ class PastaDrive:
             dados = self._get(_API, **params).json()
             for f in dados.get("files", []):
                 arquivo = self._converter(f)
+                if arquivo and arquivo.exportar:
+                    arquivo = self._assinar_pelo_conteudo(arquivo)
                 if arquivo:
                     arquivos.append(arquivo)
             pagina = dados.get("nextPageToken")
             if not pagina:
                 return sorted(arquivos, key=lambda a: a.nome)
+
+    def _assinar_pelo_conteudo(self, arquivo: ArquivoFonte) -> ArquivoFonte:
+        """Planilha do Google: a assinatura é o md5 do CSV exportado, não a versão."""
+        versao, agora = arquivo.assinatura, time.monotonic()
+        anterior = self._planilhas.get(arquivo.id)
+        if anterior and anterior[0] == versao and agora - anterior[1] > self.JANELA_PLANILHA_S:
+            md5 = anterior[2]  # versão parada há tempo: o conteúdo já assentou
+        else:
+            conteudo = self._get(f"{_API}/{arquivo.id}/export", mimeType="text/csv").content
+            md5 = hashlib.md5(conteudo).hexdigest()
+            visto_em = anterior[1] if anterior and anterior[0] == versao else agora
+            self._planilhas[arquivo.id] = (versao, visto_em, md5, conteudo)
+        return ArquivoFonte(arquivo.id, arquivo.nome, f"conteudo:{md5}", arquivo.tipo, exportar=True)
 
     @staticmethod
     def _converter(f: dict) -> Optional[ArquivoFonte]:
@@ -148,9 +172,12 @@ class PastaDrive:
     def baixar(self, arquivo: ArquivoFonte, destino: Path) -> Path:
         destino.mkdir(parents=True, exist_ok=True)
         alvo = destino / _nome_seguro(arquivo.nome)
-        if arquivo.exportar:
-            r = self._get(f"{_API}/{arquivo.id}/export", mimeType="text/csv")
+        guardado = self._planilhas.get(arquivo.id)
+        if arquivo.exportar and guardado and arquivo.assinatura == f"conteudo:{guardado[2]}":
+            conteudo = guardado[3]  # exatamente o conteúdo que gerou a assinatura
+        elif arquivo.exportar:
+            conteudo = self._get(f"{_API}/{arquivo.id}/export", mimeType="text/csv").content
         else:
-            r = self._get(f"{_API}/{arquivo.id}", alt="media", supportsAllDrives="true")
-        alvo.write_bytes(r.content)
+            conteudo = self._get(f"{_API}/{arquivo.id}", alt="media", supportsAllDrives="true").content
+        alvo.write_bytes(conteudo)
         return alvo

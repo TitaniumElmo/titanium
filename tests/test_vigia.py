@@ -163,3 +163,45 @@ def test_drive_entende_os_arquivos():
     foto = PastaDrive._converter({"id": "2", "name": "IMG_0042", "mimeType": "image/jpeg", "md5Checksum": "abc"})
     assert (foto.nome, foto.tipo, foto.assinatura, foto.exportar) == ("IMG_0042.jpg", "foto", "abc", False)
     assert PastaDrive._converter({"id": "3", "name": "contrato.pdf", "mimeType": "application/pdf"}) is None
+
+
+class _RespostaFalsa:
+    def __init__(self, dados=None, conteudo=b""):
+        self._dados, self.content = dados, conteudo
+
+    def json(self):
+        return self._dados
+
+
+class _DriveFalso(PastaDrive):
+    """O Drive como visto no teste real: a versão da planilha muda na hora, mas
+    o CSV exportado só reflete a edição algumas consultas depois."""
+
+    def __init__(self, versao, exportacoes):
+        self.pasta_id, self.conta, self.descricao = "pasta", "robo@teste", "pasta do Drive (falsa)"
+        self._planilhas = {}
+        self.versao, self.exportacoes = versao, list(exportacoes)
+
+    def _get(self, url, **params):
+        if url.endswith("/export"):
+            conteudo = self.exportacoes[0] if len(self.exportacoes) == 1 else self.exportacoes.pop(0)
+            return _RespostaFalsa(conteudo=conteudo.encode())
+        return _RespostaFalsa({"files": [{"id": "s1", "name": "fichas", "version": str(self.versao),
+                                          "modifiedTime": "2026-11-07T19:35:23Z",
+                                          "mimeType": "application/vnd.google-apps.spreadsheet"}]})
+
+
+def test_planilha_do_google_com_exportacao_atrasada(client, tmp_path):
+    drive = _DriveFalso(versao=10, exportacoes=[FICHAS])
+    v = Vigia(drive, intervalo_s=0.1, pasta_trabalho=tmp_path / "trabalho")
+    esperar_auditoria(disparar(v)["auditoria_id"])
+    [p] = pendencias_abertas("0302", "epi_inadequado")
+
+    # Edição: a versão sobe na hora, mas as 3 próximas exportações ainda vêm antigas.
+    drive.versao = 11
+    drive.exportacoes = [FICHAS, FICHAS, FICHAS, FICHAS + PROTETOR_0302]
+    resultados = [v.verificar() for _ in range(5)]
+    assert [r["mudou"] for r in resultados] == [False, False, False, False, True]
+    assert resultados[-1]["funcionarios"] == ["0302"]
+    esperar_auditoria(resultados[-1]["auditoria_id"])
+    assert ate(lambda: estado.obter_pendencia(p.id).status == "fechada")
