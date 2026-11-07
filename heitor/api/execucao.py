@@ -73,6 +73,11 @@ def _ler(arquivo: str, auditoria_id: Optional[str], funcionario_id: Optional[str
     return linhas
 
 
+def ler_linhas(arquivo: str) -> list[Linha]:
+    """Lê um arquivo de ficha fora de uma auditoria (o vigia). Lança exceção se falhar."""
+    return _ler(arquivo, None)
+
+
 def _achados(resultado: Any, auditoria_id: str) -> list[Achado]:
     """rodar_auditoria devolve list[Achado] ou {"achados": [...], "exposicao": ..., ...}."""
     brutos = resultado.get("achados", []) if isinstance(resultado, dict) else (resultado or [])
@@ -106,20 +111,39 @@ def _emissor(auditoria_id: str) -> Callable[[Union[Evento, dict]], None]:
 # ---------------------------------------------------------------------------
 
 
+def em_segundo_plano(fn: Callable[..., Any], *args: Any) -> None:
+    _executor.submit(fn, *args)
+
+
 def iniciar_auditoria(auditoria_id: str, arquivos: list[str]) -> None:
     _executor.submit(rodar_auditoria, auditoria_id, arquivos)
 
 
+def iniciar_auditoria_linhas(auditoria_id: str, linhas: list[Linha], disparado_por: Optional[str] = None) -> None:
+    """Para quem já leu as linhas (o vigia da pasta)."""
+    _executor.submit(auditar_linhas, auditoria_id, linhas, disparado_por)
+
+
 def rodar_auditoria(auditoria_id: str, arquivos: list[str]) -> None:
+    linhas = []
+    for arquivo in arquivos:
+        try:
+            linhas += _ler(arquivo, auditoria_id)
+        except Exception as exc:
+            log.exception("falha ao ler %s", arquivo)
+            _erro(auditoria_id, None, f"extrair_ficha({Path(arquivo).name})", exc)
+    auditar_linhas(auditoria_id, linhas)
+
+
+def auditar_linhas(auditoria_id: str, linhas: list[Linha], disparado_por: Optional[str] = None) -> None:
     token = ferramentas.auditoria_atual.set(auditoria_id)
     try:
-        linhas = []
-        for arquivo in arquivos:
-            try:
-                linhas += _ler(arquivo, auditoria_id)
-            except Exception as exc:
-                log.exception("falha ao ler %s", arquivo)
-                _erro(auditoria_id, None, f"extrair_ficha({Path(arquivo).name})", exc)
+        if disparado_por:
+            emitir_evento(auditoria_id, {
+                "passo": 0, "tipo": "decisao",
+                "entrada": {"linhas": len(linhas), "funcionarios": sorted({l.funcionario_id for l in linhas})},
+                "saida": f"disparado por: {disparado_por}",
+            })
         estado.salvar_linhas(auditoria_id, linhas)
 
         # Sem retentativa aqui: repetir o agente inteiro duplicaria eventos.
@@ -140,15 +164,34 @@ def rodar_auditoria(auditoria_id: str, arquivos: list[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Reauditoria (resposta do técnico ou do RH)
+# Reauditoria (resposta do técnico/RH, ou mudança detectada na pasta)
 # ---------------------------------------------------------------------------
 
 
 def executar_reauditoria(pendencia_id: str, arquivo: str, nota: Optional[str] = None) -> Pendencia:
+    """Resposta enviada pela API: lê o arquivo e reaudita."""
+    p = estado.obter_pendencia(pendencia_id)
+    if p is None:
+        raise KeyError(pendencia_id)
+
+    def ler() -> list[Linha]:
+        return _ler(arquivo, p.auditoria_id, p.funcionario_id)
+
+    return reauditar_linhas(pendencia_id, ler, nota, origem=Path(arquivo).name)
+
+
+def reauditar_linhas(
+    pendencia_id: str,
+    linhas: Union[list[Linha], Callable[[], list[Linha]]],
+    nota: Optional[str] = None,
+    origem: Optional[str] = None,
+) -> Pendencia:
     """aberta/reaberta -> aguardando -> (reauditar) -> fechada/reaberta.
 
-    Lança KeyError (não existe), TransicaoInvalida (status errado) ou
-    FalhaReauditoria (falhou duas vezes; a pendência volta ao status anterior).
+    `linhas` pode ser a lista ou uma função que a lê (a leitura entra na
+    retentativa). Lança KeyError (não existe), TransicaoInvalida (status
+    errado) ou FalhaReauditoria (falhou duas vezes; a pendência volta ao
+    status anterior).
     """
     anterior = estado.obter_pendencia(pendencia_id)
     if anterior is None:
@@ -157,16 +200,17 @@ def executar_reauditoria(pendencia_id: str, arquivo: str, nota: Optional[str] = 
     aud_id, func_id = p.auditoria_id, p.funcionario_id
 
     token = ferramentas.auditoria_atual.set(aud_id)
+    lidas: list[Linha] = []
     try:
         if aud_id:
             emitir_evento(aud_id, {
                 "funcionario_id": func_id, "passo": 1, "tipo": "decisao",
-                "entrada": {"pendencia_id": pendencia_id, "arquivo": Path(arquivo).name},
-                "saida": "resposta recebida; reauditar com as mesmas regras",
+                "entrada": {"pendencia_id": pendencia_id, "origem": origem},
+                "saida": nota or "resposta recebida; reauditar com as mesmas regras",
             })
-        linhas = _ler(arquivo, aud_id, func_id)
+        lidas = com_retentativa(linhas) if callable(linhas) else linhas
         emitir = _emissor(aud_id) if aud_id else None
-        com_retentativa(integracao.reauditar, pendencia_id, linhas, emitir)
+        com_retentativa(integracao.reauditar, pendencia_id, lidas, emitir)
     except Exception as exc:
         log.exception("reauditoria da pendência %s falhou", pendencia_id)
         _erro(aud_id, func_id, "reauditar", exc)
@@ -179,7 +223,7 @@ def executar_reauditoria(pendencia_id: str, arquivo: str, nota: Optional[str] = 
     if aud_id:
         emitir_evento(aud_id, {
             "funcionario_id": func_id, "passo": 2, "tipo": "ferramenta", "ferramenta": "reauditar",
-            "entrada": {"pendencia_id": pendencia_id, "linhas": len(linhas)},
+            "entrada": {"pendencia_id": pendencia_id, "linhas": len(lidas)},
             "saida": {"status": p.status},
         })
     return p

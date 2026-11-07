@@ -49,6 +49,12 @@ async def criar_auditoria(
     return criar_e_iniciar(caminhos, auditoria_id)
 
 
+@router.get("", response_model=list[Auditoria])
+def listar() -> list[Auditoria]:
+    """Todas as auditorias, a mais recente primeiro (inclui as disparadas pelo vigia)."""
+    return [a.model_copy(update={"relatorio": None}) for a in estado.listar_auditorias()]
+
+
 @router.get("/{auditoria_id}", response_model=ResumoAuditoria)
 def resumo(auditoria_id: str) -> ResumoAuditoria:
     aud = _auditoria_ou_404(auditoria_id)

@@ -58,6 +58,14 @@ def criar_pendencia(
     if existentes:
         return _json(existentes[0])
 
+    # O mesmo problema já tem pendência aberta, vinda de outra auditoria (o vigia
+    # reaudita a ficha a cada mudança): reaproveita em vez de duplicar.
+    mesma = _pendencia_aberta_do_mesmo_problema(achado)
+    if mesma is not None:
+        if auditoria_id:
+            estado.salvar_achado(achado)
+        return _json(mesma)
+
     pendencia = Pendencia(
         id=estado.novo_id("p"),
         achado_id=achado.id,
@@ -75,6 +83,30 @@ def criar_pendencia(
     estado.salvar_pendencia(pendencia)
     notificar(pendencia)
     return _json(pendencia)
+
+
+def _chave_do_problema(achado: Achado) -> tuple:
+    """O que identifica o mesmo problema entre auditorias. O número da linha muda
+    de uma leitura para outra; o conteúdo da entrega (data, EPI, CA) não."""
+    if achado.linha is not None and achado.auditoria_id:
+        for l in estado.obter_linhas(achado.auditoria_id):
+            if l.funcionario_id == achado.funcionario_id and l.linha == achado.linha:
+                return (achado.regra, "entrega", str(l.data), l.epi.strip().lower(), l.ca or "")
+    return (achado.regra, "texto", achado.evidencia)
+
+
+def _pendencia_aberta_do_mesmo_problema(achado: Achado) -> Optional[Pendencia]:
+    chave = None
+    for p in estado.listar_pendencias(funcionario_id=achado.funcionario_id):
+        if p.status == "fechada" or p.auditoria_id == achado.auditoria_id:
+            continue
+        anterior = estado.obter_achado(p.achado_id, p.auditoria_id)
+        if anterior is None or anterior.regra != achado.regra:
+            continue
+        chave = chave or _chave_do_problema(achado)
+        if _chave_do_problema(anterior) == chave:
+            return p
+    return None
 
 
 def fechar_pendencia(

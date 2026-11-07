@@ -40,6 +40,7 @@ class Estado:
             self._achados: dict[str, dict[str, Achado]] = defaultdict(dict)  # auditoria -> id -> achado
             self._pendencias: dict[str, Pendencia] = {}
             self._eventos: dict[str, list[Evento]] = defaultdict(list)
+            self._log: list[Evento] = []  # todos os eventos, na ordem em que chegaram
 
     def novo_id(self, prefixo: str) -> str:
         with self._lock:
@@ -56,8 +57,10 @@ class Estado:
 
     # -- auditorias ---------------------------------------------------------
 
-    def criar_auditoria(self, auditoria_id: str, arquivos: list[str]) -> Auditoria:
-        aud = Auditoria(id=auditoria_id, criada_em=datetime.now(), arquivos=arquivos)
+    def criar_auditoria(
+        self, auditoria_id: str, arquivos: list[str], disparado_por: Optional[str] = None
+    ) -> Auditoria:
+        aud = Auditoria(id=auditoria_id, criada_em=datetime.now(), arquivos=arquivos, disparado_por=disparado_por)
         with self._lock:
             self._auditorias[aud.id] = aud
             self._linhas[aud.id] = []
@@ -69,6 +72,11 @@ class Estado:
         with self._lock:
             aud = self._auditorias.get(auditoria_id)
             return aud.model_copy(deep=True) if aud else None
+
+    def listar_auditorias(self) -> list[Auditoria]:
+        """Mais recente primeiro."""
+        with self._lock:
+            return [a.model_copy(deep=True) for a in sorted(self._auditorias.values(), key=lambda a: a.criada_em, reverse=True)]
 
     def atualizar_auditoria(self, auditoria_id: str, **campos) -> None:
         with self._lock:
@@ -142,6 +150,12 @@ class Estado:
         with self._lock:
             if self._aceita(evento.auditoria_id, "evento"):
                 self._eventos[evento.auditoria_id].append(evento.model_copy(deep=True))
+                self._log.append(evento.model_copy(deep=True))
+
+    def log_desde(self, inicio: int = 0) -> list[Evento]:
+        """Todos os eventos de todas as auditorias, na ordem em que chegaram."""
+        with self._lock:
+            return [e.model_copy(deep=True) for e in self._log[inicio:]]
 
     def eventos_desde(self, auditoria_id: str, inicio: int = 0) -> list[Evento]:
         with self._lock:
