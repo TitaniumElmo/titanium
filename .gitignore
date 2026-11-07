@@ -1,0 +1,5 @@
+dados/*.txt
+dados/*.csv
+__pycache__/
+.venv/
+dados/*.gz
