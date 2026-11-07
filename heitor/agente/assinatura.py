@@ -114,4 +114,5 @@ EXPLICACAO = {
     "marca": "na coluna de assinatura há só uma marca ('{t}')",
     "iniciais": "assinatura só com iniciais ('{t}')",
     "outro_nome": "assinado '{t}', diferente do nome do funcionário",
+    "sem_linha_na_ficha": "entrega registrada na planilha sem linha na ficha de papel (falta a prova da entrega)",
 }
