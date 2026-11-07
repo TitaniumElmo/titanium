@@ -257,8 +257,12 @@ def construir_grafo(exe: Execucao):
     def consolidar(state: Estado) -> Estado:
         exe.ctx = None
         achados = list(exe.achados.values())
-        exposicao = F.IMPL["calcula_exposicao"](achados)
-        exe.evento("calcula_exposicao", {"achados": len(achados)}, exposicao)
+        # A exposição real (Gustavo) usa a função de cada funcionário (grau) e a data de cada achado (meses).
+        funcoes = {fid: str(ls[0].get("funcao", "")) for fid, ls in exe.por_funcionario.items() if ls}
+        for a in achados:
+            a.setdefault("data", _data_do_achado(exe, a))
+        exposicao = F.IMPL["calcula_exposicao"](achados, funcoes=funcoes)
+        exe.evento("calcula_exposicao", {"achados": len(achados), "funcoes": funcoes}, exposicao)
         relatorio = _gerar_relatorio(achados, exposicao)
         if relatorio is not None:
             exe.evento("gerar_relatorio", {"achados": len(achados)}, {"itens": len(relatorio.get("itens", []))})
@@ -281,6 +285,17 @@ def construir_grafo(exe: Execucao):
     g.add_edge("fim_episodio", "proximo_funcionario")
     g.add_edge("consolidar", END)
     return g.compile()
+
+
+def _data_do_achado(exe: Execucao, a: Achado) -> str | None:
+    """Data da linha do achado; para achado da ficha inteira (linha None), a entrega mais antiga do funcionário."""
+    linhas = exe.por_funcionario.get(str(a.get("funcionario_id")), [])
+    if a.get("linha") is not None:
+        for l in linhas:
+            if l.get("linha") == a["linha"] and l.get("data"):
+                return str(l["data"])
+    datas = sorted(str(l["data"]) for l in linhas if l.get("data"))
+    return datas[0] if datas else None
 
 
 def _gerar_relatorio(achados: list[Achado], exposicao: dict) -> dict | None:
