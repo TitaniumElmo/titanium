@@ -14,6 +14,7 @@ import itertools
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from heitor.agente.assinatura import EXPLICACAO as EXPLICACAO_ASSINATURA
 from heitor.agente.tipos import AchadoDict as Achado, LinhaDict as Linha, PendenciaDict as Pendencia
 
 # ---------------------------------------------------------------- Gustavo ---
@@ -74,7 +75,7 @@ def consulta_ca(numero: str, data: str) -> dict[str, Any]:
     valido = data <= ca["validade"] and not any(a <= data <= b for a, b in ca.get("lacunas", []))
     return {"numero": numero, "encontrado": True, "valido_na_data": valido,
             "validade": ca["validade"], "situacao": ca["situacao"], "equipamento": ca["equipamento"],
-            "conflitante": False}
+            "conflito": False}
 
 
 def buscar_ca_proximo(numero: str) -> list[dict[str, Any]]:
@@ -104,7 +105,13 @@ def audita_linha(linha: Linha, funcao: str) -> list[Achado]:
     fid, n = linha.get("funcionario_id", "?"), linha.get("linha")
     achados: list[Achado] = []
     conf_ass = (linha.get("confianca") or {}).get("assinatura", 1.0)
-    if linha.get("assinatura") is None or (linha.get("assinatura") is False and conf_ass < 0.7):
+    tipo_ass = linha.get("assinatura_tipo")
+    if tipo_ass in EXPLICACAO_ASSINATURA:
+        texto = EXPLICACAO_ASSINATURA[tipo_ass].format(t=linha.get("assinatura_texto"))
+        gravidade = "irregular" if conf_ass >= 0.7 else "risco"
+        achados.append(_achado(linha, fid, "assinatura_ausente", gravidade, "passivo" if gravidade == "irregular" else "prova",
+                               f"linha {n}, {texto}", "conferir a assinatura na ficha física"))
+    elif linha.get("assinatura") is None or (linha.get("assinatura") is False and conf_ass < 0.7):
         # PROPOSTA ao Gustavo: leitura incerta da assinatura é risco, nunca irregular.
         achados.append(_achado(linha, fid, "assinatura_ausente", "risco", "prova",
                                f"linha {n}, assinatura incerta na leitura (confiança {conf_ass:.2f})",
@@ -113,6 +120,13 @@ def audita_linha(linha: Linha, funcao: str) -> list[Achado]:
         achados.append(_achado(linha, fid, "assinatura_ausente", "irregular", "passivo",
                                f"linha {n}, sem assinatura", "colher assinatura nas próximas entregas"))
     ca, data = linha.get("ca"), linha.get("data")
+    conf_ca = linha.get("conferencia_ca")
+    if ca and conf_ca and conf_ca.get("confere") is False:
+        # PROPOSTA ao Gustavo/Pierre: regra "ca_nao_confere" no contrato. Leitura duvidosa nunca vira "CA vencido".
+        sug = f"; números parecidos que combinam com o EPI: {', '.join(conf_ca['sugestoes'][:3])}" if conf_ca["sugestoes"] else ""
+        achados.append(_achado(linha, fid, "ca_nao_encontrado", "risco", "prova",
+                               f"linha {n}, {conf_ca['motivo']}{sug}", "confirmar o CA com o RH (nota fiscal)"))
+        return achados
     if not ca:
         achados.append(_achado(linha, fid, "ca_ausente", "risco", "prova",
                                f"linha {n}, campo CA vazio", "pedir nota fiscal ao RH"))
@@ -159,14 +173,23 @@ def audita_funcionario(linhas: list[Linha], funcao: str) -> list[Achado]:
     return achados
 
 
-SALARIO_MINIMO = 1518.00  # placeholder: o Gustavo confirma o valor usado
+SALARIO_MINIMO = 1621.00  # o mesmo do exposicao.py do Gustavo
 
 
-def calcula_exposicao(achados: list[Achado]) -> dict[str, Any]:
+def calcula_exposicao(achados: list[Achado], funcoes: dict[str, str] | None = None, hoje: date | None = None) -> dict[str, Any]:
+    """Mesma assinatura do heitor/dados/exposicao.py real; grau fixo 0,20 e meses desde a data mais antiga."""
+    hoje = hoje or date.today()
     passivos = [a for a in achados if a.get("tipo") == "passivo" and a.get("gravidade") != "ok"]
     funcionarios = sorted({a["funcionario_id"] for a in passivos})
-    meses = 12  # placeholder: o real calcula os meses sem prova por funcionário
-    total = 0.20 * SALARIO_MINIMO * min(meses, 60) * len(funcionarios)
+    total = 0.0
+    for fid in funcionarios:
+        datas = sorted(str(a["data"]) for a in passivos if a["funcionario_id"] == fid and a.get("data"))
+        if datas:
+            d = date.fromisoformat(datas[0][:10])
+            meses = (hoje.year - d.year) * 12 + hoje.month - d.month
+        else:
+            meses = 12
+        total += 0.20 * SALARIO_MINIMO * min(max(meses, 0), 60)
     return {"total_brl": round(total, 2), "salario_minimo": SALARIO_MINIMO, "funcionarios": funcionarios,
             "descricao": "exposição potencial máxima, se a perícia confirmar a insalubridade"}
 
