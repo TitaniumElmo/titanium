@@ -1,71 +1,117 @@
-"""Contrato JSON entre os módulos (seção 7 do CLAUDE.md).
+"""Contrato de dados do Heitor (CLAUDE.md, seção 7).
 
-Os objetos circulam como dicts simples; os TypedDicts abaixo só documentam
-os campos e ajudam o editor. Mudou algo aqui? Avise o time antes.
+Todos os módulos importam daqui:
+
+    from heitor.contrato import Linha, Achado, Pendencia, Evento
+
+Campos marcados com `# PROPOSTA` ainda não estão no CLAUDE.md e precisam
+da aprovação do time. Os valores fechados (Literal) não devem ser alterados
+sem avisar todo mundo: a interface depende deles.
 """
 
 from __future__ import annotations
 
-from typing import Any, Callable, Literal, Optional, TypedDict
+from datetime import date, datetime
+from typing import Any, Literal, Optional
+
+from pydantic import BaseModel, Field
+
+# ---------------------------------------------------------------------------
+# Valores fechados
+# ---------------------------------------------------------------------------
 
 Gravidade = Literal["irregular", "risco", "ok"]
-Tipo = Literal["corrigivel", "prova", "passivo"]
+TipoAchado = Literal["corrigivel", "prova", "passivo"]
 Destino = Literal["tecnico", "rh"]
-Status = Literal["aberta", "aguardando", "fechada", "reaberta"]
+StatusPendencia = Literal["aberta", "aguardando", "fechada", "reaberta"]
 
-GRAVIDADES: tuple[str, ...] = ("irregular", "risco", "ok")
-TIPOS: tuple[str, ...] = ("corrigivel", "prova", "passivo")
-DESTINOS: tuple[str, ...] = ("tecnico", "rh")
-STATUS: tuple[str, ...] = ("aberta", "aguardando", "fechada", "reaberta")
+# PROPOSTA: lista fechada de regras, para a interface mostrar rótulos amigáveis.
+Regra = Literal[
+    "assinatura_ausente",
+    "ca_ausente",
+    "ca_vencido",
+    "ca_nao_encontrado",
+    "ca_cancelado",  # CANCELADO ou SUSPENSO na base CAEPI
+    "ca_conflitante",  # número repetido com dados que discordam
+    "epi_inadequado",  # EPI exigido ausente ou de categoria errada
+    "troca_atrasada",  # intervalo maior que a vida útil do fabricante
+    "treinamento_ausente",
+]
+
+# PROPOSTA: separa chamada de ferramenta, decisão do LLM e falha no log.
+TipoEvento = Literal["ferramenta", "decisao", "erro"]
 
 
-class Linha(TypedDict, total=False):
-    funcionario_id: str
+# ---------------------------------------------------------------------------
+# Modelos
+# ---------------------------------------------------------------------------
+
+
+class Linha(BaseModel):
+    """Uma linha da ficha de EPI depois de lida (CSV ou foto)."""
+
+    funcionario_id: str  # texto, para manter zeros à esquerda ("0302")
     nome: str
     funcao: str
-    linha: int
-    data: Optional[str]  # AAAA-MM-DD
-    epi: Optional[str]
-    qtd: Optional[int]
-    ca: Optional[str]
-    motivo: Optional[str]
-    assinatura: Optional[bool]
-    confianca: dict[str, float]
-    origem: str
+    linha: int  # número da linha no arquivo de origem
+    data: Optional[date] = None  # data da entrega; None se não foi possível ler
+    epi: str
+    qtd: int = 1
+    ca: Optional[str] = None  # número do CA como texto; None se vazio na ficha
+    motivo: Optional[str] = None  # códigos a definir (ex.: T = troca)
+    assinatura: Optional[bool] = None  # None se não foi possível ler
+    confianca: dict[str, float] = Field(default_factory=dict)  # 0 a 1, por campo
+    origem: str  # arquivo de onde a linha veio
 
 
-class Achado(TypedDict, total=False):
+class Achado(BaseModel):
+    """Um problema encontrado. Só `audita_linha` produz achados."""
+
     id: str
+    auditoria_id: Optional[str] = None  # PROPOSTA
     funcionario_id: str
-    linha: Optional[int]
-    regra: str
+    linha: Optional[int] = None  # PROPOSTA: None quando vale para o funcionário (ex.: treinamento)
+    regra: Regra
     gravidade: Gravidade
-    tipo: Tipo
+    tipo: TipoAchado
     evidencia: str
     acao_sugerida: str
+    norma: Optional[str] = None  # PROPOSTA: súmula/NR citada no relatório
+    exposicao_rs: Optional[float] = None  # PROPOSTA: só para tipo "passivo"
 
 
-class Pendencia(TypedDict, total=False):
+class HistoricoPendencia(BaseModel):
+    """Uma mudança de status da pendência."""  # PROPOSTA
+
+    status: StatusPendencia
+    ts: datetime
+    nota: Optional[str] = None
+
+
+class Pendencia(BaseModel):
+    """Tarefa para o técnico (corrigir) ou para o RH (enviar documento)."""
+
     id: str
     achado_id: str
+    auditoria_id: Optional[str] = None  # PROPOSTA: filtro de GET /pendencias
+    funcionario_id: Optional[str] = None  # PROPOSTA: tela do técnico
     destino: Destino
     acao: str
-    prazo: str  # AAAA-MM-DD
-    status: Status
-    historico: list[dict[str, Any]]
+    motivo: Optional[str] = None  # PROPOSTA: por que a pendência existe
+    prazo: date
+    status: StatusPendencia = "aberta"
+    historico: list[HistoricoPendencia] = Field(default_factory=list)
 
 
-class Evento(TypedDict, total=False):
+class Evento(BaseModel):
+    """Um passo do agente, para o log ao vivo e o rastro auditável."""
+
     auditoria_id: str
+    funcionario_id: Optional[str] = None  # PROPOSTA: um episódio por funcionário
     passo: int
-    ferramenta: str
-    entrada: dict[str, Any]
-    saida: Any
-    custo_usd: float
-    ts: str
-    # Campos extras do agente (opcionais para a interface):
-    funcionario_id: Optional[str]
-    pensamento: Optional[str]
-
-
-EmitirEvento = Callable[[Evento], None]
+    tipo: TipoEvento = "ferramenta"  # PROPOSTA
+    ferramenta: Optional[str] = None  # None quando tipo = "decisao"
+    entrada: dict[str, Any] = Field(default_factory=dict)
+    saida: Any = None
+    custo_usd: float = 0.0
+    ts: datetime

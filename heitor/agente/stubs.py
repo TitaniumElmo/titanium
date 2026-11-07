@@ -11,10 +11,10 @@ calcula_exposicao NÃO está no contrato: é a proposta da Sofia, a combinar.
 from __future__ import annotations
 
 import itertools
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
-from heitor.contrato import Achado, Linha, Pendencia
+from heitor.agente.tipos import AchadoDict as Achado, LinhaDict as Linha, PendenciaDict as Pendencia
 
 # ---------------------------------------------------------------- Gustavo ---
 
@@ -116,7 +116,7 @@ def audita_linha(linha: Linha, funcao: str) -> list[Achado]:
             achados.append(_achado(linha, fid, "ca_nao_encontrado", "risco", "prova",
                                    f"linha {n}, CA {ca} não está na base", "confirmar o CA com o RH"))
         elif not r["valido_na_data"]:
-            achados.append(_achado(linha, fid, "ca_vencido_na_entrega", "risco", "prova",
+            achados.append(_achado(linha, fid, "ca_vencido", "risco", "prova",
                                    f"linha {n}, CA {ca} vencido em {data} (validade {r['validade']})",
                                    "pedir nota fiscal ao RH"))
     return achados  # lista vazia = linha ok
@@ -139,14 +139,14 @@ def audita_funcionario(linhas: list[Linha], funcao: str) -> list[Achado]:
     for e in exig["epis"]:
         entregas = sorted(l["data"] for l in linhas if l.get("data") and categoria_epi(l.get("epi")) == e["epi"])
         if not entregas:
-            achados.append(_achado(None, fid, "epi_exigido_ausente", "irregular", "corrigivel",
+            achados.append(_achado(None, fid, "epi_inadequado", "irregular", "corrigivel",
                                    f"nenhuma entrega de {e['epi']} na ficha; a função exige ({exig['agente_nocivo']})",
                                    f"entregar {e['epi']}, registrar com o CA e colher a assinatura"))
             continue
         datas = [date.fromisoformat(d) for d in entregas] + [date.today()]
         for a, b in zip(datas, datas[1:]):
             if (b - a).days > e["vida_util_dias"]:
-                achados.append(_achado(None, fid, "troca_fora_da_vida_util", "irregular", "corrigivel",
+                achados.append(_achado(None, fid, "troca_atrasada", "irregular", "corrigivel",
                                        f"{e['epi']}: {(b - a).days} dias entre {a} e {b}; vida útil {e['vida_util_dias']} dias",
                                        f"trocar {e['epi']} agora"))
                 break
@@ -173,9 +173,10 @@ _ids_pend = itertools.count(1)
 
 
 def criar_pendencia(achado: Achado, destino: str, acao: str, prazo: str) -> Pendencia:
-    p: Pendencia = {"id": f"p-{next(_ids_pend)}", "achado_id": achado["id"], "destino": destino,
-                    "acao": acao, "prazo": prazo, "status": "aberta",
-                    "historico": [{"status": "aberta", "em": date.today().isoformat()}]}
+    p: Pendencia = {"id": f"p-{next(_ids_pend)}", "achado_id": achado["id"],
+                    "auditoria_id": achado.get("auditoria_id"), "funcionario_id": achado.get("funcionario_id"),
+                    "destino": destino, "acao": acao, "motivo": achado.get("evidencia"), "prazo": prazo,
+                    "status": "aberta", "historico": [{"status": "aberta", "ts": _agora(), "nota": None}]}
     _PENDENCIAS[p["id"]] = p
     _ACHADOS_DAS_PENDENCIAS[p["id"]] = achado
     return p
@@ -184,7 +185,7 @@ def criar_pendencia(achado: Achado, destino: str, acao: str, prazo: str) -> Pend
 def fechar_pendencia(pendencia: Pendencia, resultado: str) -> Pendencia:
     p = _PENDENCIAS.get(pendencia["id"], pendencia)
     p["status"] = "fechada" if resultado == "confirmada" else "reaberta"
-    p.setdefault("historico", []).append({"status": p["status"], "em": date.today().isoformat()})
+    p.setdefault("historico", []).append({"status": p["status"], "ts": _agora(), "nota": resultado})
     return p
 
 
@@ -193,6 +194,10 @@ def obter_pendencia(pendencia_id: str) -> tuple[Pendencia, Achado] | None:
     if pendencia_id not in _PENDENCIAS:
         return None
     return _PENDENCIAS[pendencia_id], _ACHADOS_DAS_PENDENCIAS[pendencia_id]
+
+
+def _agora() -> str:
+    return datetime.now().isoformat(timespec="seconds")
 
 
 def prazo_padrao(dias: int = 5) -> str:

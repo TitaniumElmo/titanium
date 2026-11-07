@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from typing import Any, Callable
 
 from heitor.agente import stubs
-from heitor.contrato import Achado, Linha, Pendencia
+from heitor.agente.tipos import AchadoDict as Achado, LinhaDict as Linha, PendenciaDict as Pendencia
 
 
 # ------------------------------------------------ funções reais ou stubs ---
@@ -78,6 +78,7 @@ class Contexto:
     linhas_auditadas: set[int] = field(default_factory=set)
     funcionario_auditado: bool = False
     revisao: list[str] = field(default_factory=list)  # falhas que viraram pendência de revisão
+    auditoria_id: str | None = None
 
     def achados_do_funcionario(self) -> list[Achado]:
         return [a for a in self.achados.values() if a.get("funcionario_id") == self.funcionario_id]
@@ -165,6 +166,7 @@ def _t_buscar_ca_proximo(ctx: Contexto, args: dict) -> Resultado:
 def _registrar(ctx: Contexto, achados: list[Achado]) -> list[Achado]:
     for a in achados:
         a.setdefault("funcionario_id", ctx.funcionario_id)
+        a.setdefault("auditoria_id", ctx.auditoria_id)
         ctx.achados[a["id"]] = a
     return achados
 
@@ -302,6 +304,7 @@ def executar(nome: str, args: dict[str, Any], ctx: Contexto) -> Resultado:
 
 def _falha_vira_revisao(ctx: Contexto, nome: str, erro: Exception | None) -> Resultado:
     achado: Achado = {"id": f"rev-{ctx.funcionario_id}-{len(ctx.revisao) + 1}", "funcionario_id": ctx.funcionario_id,
+                      "auditoria_id": ctx.auditoria_id,
                       "linha": None, "regra": "falha_de_ferramenta", "gravidade": "risco", "tipo": "corrigivel",
                       "evidencia": f"{nome} falhou duas vezes: {type(erro).__name__}: {str(erro)[:150]}",
                       "acao_sugerida": "revisar manualmente esta ficha"}
