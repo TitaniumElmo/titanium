@@ -103,7 +103,13 @@ def _achado(linha: Linha | None, funcionario_id: str, regra: str, gravidade: str
 def audita_linha(linha: Linha, funcao: str) -> list[Achado]:
     fid, n = linha.get("funcionario_id", "?"), linha.get("linha")
     achados: list[Achado] = []
-    if linha.get("assinatura") is False:
+    conf_ass = (linha.get("confianca") or {}).get("assinatura", 1.0)
+    if linha.get("assinatura") is None or (linha.get("assinatura") is False and conf_ass < 0.7):
+        # PROPOSTA ao Gustavo: leitura incerta da assinatura é risco, nunca irregular.
+        achados.append(_achado(linha, fid, "assinatura_ausente", "risco", "prova",
+                               f"linha {n}, assinatura incerta na leitura (confiança {conf_ass:.2f})",
+                               "conferir a assinatura na ficha física"))
+    elif linha.get("assinatura") is False:
         achados.append(_achado(linha, fid, "assinatura_ausente", "irregular", "passivo",
                                f"linha {n}, sem assinatura", "colher assinatura nas próximas entregas"))
     ca, data = linha.get("ca"), linha.get("data")

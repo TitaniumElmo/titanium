@@ -274,10 +274,22 @@ def extrair_ficha(arquivo: str, padrao: dict[str, Any] | None = None) -> dict[st
         cabecalho, linhas = _ler_csv(caminho)
         return extrair_linhas(cabecalho, linhas, caminho.name, padrao)
     if sufixo in (".jpg", ".jpeg", ".png", ".webp"):
-        raise NotImplementedError("leitura de foto: próxima etapa (19h–23h)")
+        from heitor.agente.foto import ler_foto
+
+        r = ler_foto(caminho)
+        return {"linhas": r["linhas"], "mapeamento": {"origem": "foto", "modelo": r["modelo"],
+                                                      "cabecalho": r["cabecalho"], "custo_usd": r["custo_usd"]}}
     raise ValueError(f"formato não suportado: {sufixo}")
 
 
-def reextrair_campo(arquivo: str, linha: int, campo: str) -> dict[str, Any] | None:
-    """Nova tentativa num campo de baixa confiança. Só faz sentido para foto (próxima etapa)."""
-    return None
+def reextrair_campo(arquivo: str, linha: int, campo: str, dados: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Nova tentativa num campo de baixa confiança. Hoje: assinatura em foto.
+
+    Devolve {"valor": ..., "confianca": float} ou None se não houver como reler.
+    """
+    from heitor.agente.foto import caminho_da_origem, reextrair_assinatura
+
+    caminho = caminho_da_origem(arquivo)
+    if not caminho or campo != "assinatura" or dados is None:
+        return None
+    return reextrair_assinatura(caminho, dados)

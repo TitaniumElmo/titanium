@@ -201,7 +201,7 @@ def _t_reextrair_campo(ctx: Contexto, args: dict) -> Resultado:
     if n not in ctx.linhas or not campo:
         return Resultado({"erro": "informe linha e campo"}, ok=False)
     linha = ctx.linhas[n]
-    novo = extracao.reextrair_campo(linha.get("origem", ""), n, campo)
+    novo = extracao.reextrair_campo(linha.get("origem", ""), n, campo, dados=linha)
     if novo and novo.get("confianca", 0) > linha.get("confianca", {}).get(campo, 0):
         linha[campo] = novo["valor"]
         linha.setdefault("confianca", {})[campo] = novo["confianca"]
