@@ -9,6 +9,8 @@ from heitor.dados.funcoes import categoria_epi, exigencia_funcao
 
 _ids = itertools.count(1)
 
+LIMITE_ASSINATURA = 0.7
+
 
 def _achado(funcionario_id, linha, regra, gravidade, tipo, evidencia, acao):
     campos = dict(
@@ -78,7 +80,15 @@ def _aceita_dict(funcao_real):
 def audita_linha(linha: Linha, funcao: str) -> list[Achado]:
     f, n = linha.funcionario_id, linha.linha
     achados = []
-    if linha.assinatura is False:
+    conf = linha.confianca.get("assinatura", 1.0)
+    if linha.assinatura is None or (linha.assinatura is False and conf < LIMITE_ASSINATURA):
+        if "assinatura" in linha.confianca:
+            evidencia = f"linha {n}, assinatura incerta na leitura (confiança {conf:.2f})"
+        else:
+            evidencia = f"linha {n}, assinatura não identificada na leitura"
+        achados.append(_achado(f, n, "assinatura_ausente", "risco", "prova", evidencia,
+                               "conferir a assinatura na ficha física"))
+    elif linha.assinatura is False:
         achados.append(_achado(f, n, "assinatura_ausente", "irregular", "passivo",
                                f"linha {n}, sem assinatura", "colher assinatura nas próximas entregas"))
     ca = _normaliza_ca(linha.ca)

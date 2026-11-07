@@ -12,7 +12,7 @@ precisa_base = pytest.mark.skipif(not CAMINHO.exists(), reason="CSV do CAEPI nã
 
 
 def L(n, epi, d, ca=None, fid="0302"):
-    return Linha(funcionario_id=fid, nome="X", funcao="armador", linha=n, data=d, epi=epi, ca=ca, origem="t")
+    return Linha(funcionario_id=fid, nome="X", funcao="armador", linha=n, data=d, epi=epi, ca=ca, origem="t", assinatura=True)
 
 
 def regras(achados):
@@ -61,10 +61,45 @@ def test_linha_assinatura_ausente():
     assert regras(a) == ["assinatura_ausente"] and a[0].gravidade == "irregular" and a[0].tipo == "passivo"
 
 
-@precisa_base
-def test_linha_assinatura_ilegivel_nao_acusa():
+def _assina(assinatura, confianca=None):
     l = L(1, "luva", date(2026, 11, 1), "21245")
-    assert l.assinatura is None and audita_linha(l, "armador") == []
+    l.assinatura = assinatura
+    if confianca is not None:
+        l.confianca = {"assinatura": confianca}
+    return l
+
+
+@precisa_base
+def test_assinatura_none_vira_risco_prova():
+    a = audita_linha(_assina(None), "armador")
+    assert regras(a) == ["assinatura_ausente"]
+    assert (a[0].gravidade, a[0].tipo) == ("risco", "prova")
+    assert a[0].evidencia == "linha 1, assinatura não identificada na leitura"
+    assert a[0].acao_sugerida == "conferir a assinatura na ficha física"
+
+
+@precisa_base
+def test_assinatura_none_mostra_a_confianca():
+    a = audita_linha(_assina(None, 0.4), "armador")
+    assert a[0].evidencia == "linha 1, assinatura incerta na leitura (confiança 0.40)"
+
+
+@precisa_base
+def test_assinatura_false_com_confianca_baixa_vira_risco_prova():
+    a = audita_linha(_assina(False, 0.69), "armador")
+    assert (a[0].gravidade, a[0].tipo) == ("risco", "prova") and "confiança 0.69" in a[0].evidencia
+
+
+@precisa_base
+def test_assinatura_false_com_confianca_no_limite_ou_sem_confianca_e_passivo():
+    for conf in (0.7, 0.95, None):
+        a = audita_linha(_assina(False, conf), "armador")
+        assert regras(a) == ["assinatura_ausente"] and (a[0].gravidade, a[0].tipo) == ("irregular", "passivo")
+
+
+@precisa_base
+def test_assinatura_true_nao_acusa():
+    assert audita_linha(_assina(True, 0.1), "armador") == []
 
 
 def test_linha_ca_ausente():
