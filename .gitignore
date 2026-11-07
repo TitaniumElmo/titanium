@@ -1,5 +1,10 @@
+node_modules/
+.venv/
+.env
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
 dados/*.txt
 dados/*.csv
-__pycache__/
-.venv/
 dados/*.gz

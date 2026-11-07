@@ -1,0 +1,5 @@
+funcionario_id,nome,funcao,data,epi,qtd,ca,motivo,assinatura
+0302,Rafael Souza Costa,servente,2024-02-05,capacete,1,29637,E,sim
+0302,Rafael Souza Costa,servente,2024-02-05,botina,1,28499,E,sim
+0302,Rafael Souza Costa,servente,2023-09-12,luva de raspa,1,,T,sim
+0302,Rafael Souza Costa,servente,2026-11-07,protetor auditivo,1,17664,E,sim
