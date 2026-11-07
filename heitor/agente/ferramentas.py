@@ -17,6 +17,7 @@ from datetime import date, timedelta
 from typing import Any, Callable
 
 from heitor.agente import stubs
+from heitor.agente.conferencia_datas import para_auditoria
 from heitor.agente.tipos import AchadoDict as Achado, LinhaDict as Linha, PendenciaDict as Pendencia
 
 
@@ -191,26 +192,49 @@ def _marcar_conferencia_ca(ctx: Contexto, a: Achado) -> None:
                           f"escrito {hip}, foi erro de leitura; se está escrito {linha.get('ca')}, o registro está errado")
 
 
-def criar_conferencia_ca(ctx: Contexto) -> Pendencia | None:
-    """Uma pendência por funcionário com todos os CAs a conferir na ficha física."""
+def criar_conferencia(ctx: Contexto) -> Pendencia | None:
+    """UMA pendência por funcionário com tudo o que precisa ser conferido no papel: CAs e datas em dúvida.
+
+    Em cada item: o que foi lido, o provável e por quê. Se o escrito for o provável, foi erro de leitura;
+    se for o lido, é falha do registro (achado real; o registro antigo não é reescrito).
+    """
     grupo = [a for a in ctx.achados_do_funcionario()
              if a.get("grupo") == GRUPO_CONFERIR_CA and a["id"] not in ctx.pendencia_por_achado]
-    if not grupo:
-        return None
     itens = []
     for a in sorted(grupo, key=lambda x: x.get("linha") or 0):
         linha = ctx.linhas.get(a.get("linha")) or {}
         conf = linha.get("conferencia_ca") or {}
         if conf.get("hipotese"):
-            detalhe = f"lido {linha.get('ca')}, provável {conf['hipotese']}"
-        elif conf.get("equipamento"):  # o CA existe, mas é de outro EPI: CA ou descrição do EPI lidos errado, ou erro de registro
+            detalhe = f"CA lido {linha.get('ca')}, provável {conf['hipotese']}"
+        elif conf.get("equipamento"):
             detalhe = f"CA {linha.get('ca')} é de {conf['equipamento'].lower()[:30]}, ficha diz '{linha.get('epi')}'"
         else:
-            detalhe = f"lido {linha.get('ca')}, que não existe na base"
+            detalhe = f"CA lido {linha.get('ca')}, que não existe na base"
         itens.append(f"linha {a.get('linha')}: {detalhe}")
+    # datas: agrupa linhas com a mesma leitura e a mesma hipótese ("linhas 1-5: data lida ..., provável ...")
+    datas: dict[tuple, list[int]] = {}
+    for n, l in sorted(ctx.linhas.items()):
+        cd = l.get("conferencia_data")
+        if cd:
+            datas.setdefault((cd["lida"], cd.get("hipotese"), cd["motivo"]), []).append(n)
+    for (lida, hip, motivo), ns in datas.items():
+        quais = f"linhas {ns[0]}-{ns[-1]}" if len(ns) > 1 and ns == list(range(ns[0], ns[-1] + 1)) else \
+            ("linha " + ", ".join(map(str, ns)))
+        itens.append(f"{quais}: data lida {lida}" + (f", provável {hip}" if hip else "") + f" ({motivo})")
+    if not itens:
+        return None
     acao = ("conferir na ficha física: " + "; ".join(itens)
-            + ". Se o escrito for diferente do lido, foi erro de leitura; se for igual, corrigir o registro")
-    p = criar_pendencia_validada(ctx, grupo[0], acao=acao[:300], destino="tecnico")
+            + ". Se o escrito for diferente do lido, foi erro de leitura; se for igual, o registro está errado e vira achado")
+    if grupo:
+        ancora = grupo[0]
+    else:  # só datas em dúvida: um achado de risco para a pendência existir
+        ancora = {"id": f"leitura-{ctx.funcionario_id}", "funcionario_id": ctx.funcionario_id,
+                  "auditoria_id": ctx.auditoria_id, "linha": None,
+                  "regra": "falha_de_ferramenta",  # PROPOSTA ao Pierre: regra "leitura_incerta"
+                  "gravidade": "risco", "tipo": "corrigivel", "grupo": GRUPO_CONFERIR_CA,
+                  "evidencia": "; ".join(itens)[:300], "acao_sugerida": "conferir na ficha física"}
+        ctx.achados[ancora["id"]] = ancora
+    p = criar_pendencia_validada(ctx, ancora, acao=acao, destino="tecnico", limite=600)
     for a in grupo[1:]:
         ctx.pendencia_por_achado[a["id"]] = p["id"]
     return p
@@ -224,7 +248,7 @@ def _t_audita_linha(ctx: Contexto, args: dict) -> Resultado:
         return Resultado({"erro": f"linhas válidas: {sorted(ctx.linhas)}"}, ok=False)
     por_linha = {}
     for n in numeros:
-        achados = _registrar(ctx, IMPL["audita_linha"](ctx.linhas[n], ctx.funcao))
+        achados = _registrar(ctx, IMPL["audita_linha"](para_auditoria(ctx.linhas[n]), ctx.funcao))
         ctx.linhas_auditadas.add(n)
         por_linha[n] = [_resumo_achado(a) for a in achados if a.get("gravidade") != "ok"] or "ok"
     saida: dict[str, Any] = {"por_linha": por_linha}
@@ -234,7 +258,7 @@ def _t_audita_linha(ctx: Contexto, args: dict) -> Resultado:
 
 
 def _t_audita_funcionario(ctx: Contexto, args: dict) -> Resultado:
-    achados = _registrar(ctx, IMPL["audita_funcionario"](list(ctx.linhas.values()), ctx.funcao))
+    achados = _registrar(ctx, IMPL["audita_funcionario"]([para_auditoria(l) for l in ctx.linhas.values()], ctx.funcao))
     ctx.funcionario_auditado = True
     return Resultado({"achados": [_resumo_achado(a) for a in achados if a.get("gravidade") != "ok"] or "ok"})
 
@@ -274,9 +298,9 @@ def _t_criar_pendencia(ctx: Contexto, args: dict) -> Resultado:
 
 
 def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, prazo_dias: Any = None,
-                             destino: str | None = None) -> Pendencia:
+                             destino: str | None = None, limite: int = 300) -> Pendencia:
     destino = destino or DESTINO_POR_TIPO.get(achado.get("tipo", ""), "tecnico")
-    acao = str(acao or achado.get("acao_sugerida") or "revisar o achado").strip()[:300]
+    acao = str(acao or achado.get("acao_sugerida") or "revisar o achado").strip()[:limite]
     if _sugere_fraude(acao):
         acao = achado.get("acao_sugerida") or "revisar o achado"
     try:

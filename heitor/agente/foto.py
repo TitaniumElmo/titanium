@@ -27,6 +27,7 @@ from typing import Any
 from heitor.agente.assinatura import EFEITO as EFEITO_ASSINATURA
 from heitor.agente.assinatura import classificar_linhas as classificar_assinaturas
 from heitor.agente.conferencia_ca import aplicar as conferir_ca
+from heitor.agente.conferencia_datas import aplicar as conferir_datas
 from heitor.agente.ferramentas import normalizar_ca, normalizar_data
 from heitor.agente.llm import ClienteLLM, extrair_json
 from heitor.agente.tipos import LinhaDict
@@ -52,7 +53,7 @@ assinatura: true se a coluna Assinatura DAQUELA linha tem assinatura ou rubrica,
 Cuidado: a foto pode estar inclinada e uma assinatura pode invadir a linha vizinha.
 
 Responda SOMENTE com JSON:
-{"cabecalho": {"nome": "...", "matricula": "...", "funcao": "..."},
+{"cabecalho": {"nome": "...", "matricula": "...", "funcao": "...", "data_admissao": "DD/MM/AAAA"},
  "linhas": [{"data": "DD/MM/AAAA", "epi": "...", "ca": "...", "qtd": "...", "motivo": "...", "assinatura": true}]}"""
 
 PROMPT_ASSINATURAS = """Liste, de cima para baixo, cada linha de entrega desta ficha de EPI com a data
@@ -148,6 +149,8 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
     nome, _ = _campo(cab.get("nome"))
     matricula, _ = _campo(cab.get("matricula"))
     funcao, _ = _campo(cab.get("funcao"))
+    admissao_txt, _ = _campo(cab.get("data_admissao"))
+    admissao = normalizar_data(admissao_txt) if admissao_txt else None
     funcionario_id = re.sub(r"\D", "", matricula or "") or (nome or caminho.stem)
 
     linhas: list[LinhaDict] = []
@@ -179,6 +182,7 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
             "linha": n, "data": data, "epi": epi or "", "qtd": int(m.group()) if m else 1, "ca": ca,
             "motivo": motivo, "assinatura": _bool(item.get("assinatura")), "confianca": conf,
             "origem": caminho.name,
+            "data_admissao": admissao,  # campo interno (fora do contrato): coerência das datas
         })
 
     textos_b, custo_b = _pergunta_b(cliente, b64, linhas)
@@ -206,8 +210,10 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
     # CA que não combina com o EPI fica com baixa confiança. Testado e descartado: perguntar ao modelo
     # "é 14664 ou 17664?" (ele repete a própria leitura). A hipótese vem dos CAs da empresa, no grafo.
     conferir_ca(linhas)
+    conferir_datas(linhas)  # entrega antes da admissão ou depois de hoje: data em dúvida, nunca trocada
 
-    return {"linhas": linhas, "cabecalho": {"nome": nome, "matricula": matricula, "funcao": funcao},
+    return {"linhas": linhas, "cabecalho": {"nome": nome, "matricula": matricula, "funcao": funcao,
+                                            "data_admissao": admissao},
             "custo_usd": round(custo, 6), "modelo": MODELO_VISAO}
 
 

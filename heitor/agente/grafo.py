@@ -31,6 +31,7 @@ from langgraph.graph import END, StateGraph
 from heitor.agente import ferramentas as F
 from heitor.agente.conferencia_ca import aplicar as conferir_ca
 from heitor.agente.conferencia_ca import hipoteses_da_empresa
+from heitor.agente.conferencia_datas import aplicar as conferir_datas
 from heitor.agente.llm import ClienteLLM, LLMIndisponivel, extrair_json, llm_ligado
 from heitor.agente.tipos import AchadoDict as Achado, EmitirEvento, LinhaDict as Linha, PendenciaDict as Pendencia
 from heitor.contrato import Evento
@@ -85,6 +86,7 @@ class Execucao:
         # CA × EPI com todas as fichas juntas: os CAs que a empresa usa viram hipótese para os que não conferem.
         conferir_ca(todas)
         hipoteses_da_empresa(todas)
+        conferir_datas(todas)
         self.achados: dict[str, Achado] = {}
         self.pendencias: list[Pendencia] = []
         self.pendencia_por_achado: dict[str, str] = {}
@@ -260,10 +262,10 @@ def construir_grafo(exe: Execucao):
                 p = F.criar_pendencia_validada(ctx, a)
                 exe.evento("criar_pendencia", {"achado_id": a["id"]}, p,
                            pensamento="guarda-corpo: achado sem pendência")
-        p = F.criar_conferencia_ca(ctx)
+        p = F.criar_conferencia(ctx)
         if p:
             exe.evento("criar_pendencia", {"grupo": F.GRUPO_CONFERIR_CA}, p,
-                       pensamento="CAs que não conferem com o EPI: uma conferência no papel para a ficha toda")
+                       pensamento="CAs ou datas que não fecham com o resto da ficha: uma conferência no papel")
         return {}
 
     def consolidar(state: Estado) -> Estado:
