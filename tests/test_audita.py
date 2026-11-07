@@ -106,3 +106,29 @@ def test_sem_data_ainda_acusa_nao_encontrado_e_cancelado_mas_nao_vencido():
     assert regras(audita_linha(L(1, "luva", None, "99999999"), "armador")) == ["ca_nao_encontrado"]
     assert regras(audita_linha(L(1, "luva", None, "33295"), "armador")) == ["ca_cancelado"]
     assert audita_linha(L(1, "botina", None, "25"), "armador") == []
+
+
+def _fake_ca(situacao, validade, conflito=False):
+    return lambda numero, data: {"numero": numero, "encontrado": True, "valido_na_data": False,
+                                 "validade": validade, "situacao": situacao, "equipamento": "X",
+                                 "conflito": conflito, "motivo": ""}
+
+
+def test_conflitante_com_linha_cancelada_e_vencida_gera_so_conflitante(monkeypatch):
+    monkeypatch.setattr("heitor.dados.regras.consulta_ca", _fake_ca("CANCELADO", "2020-01-01", conflito=True))
+    assert regras(audita_linha(L(1, "luva", date(2026, 11, 1), "1"), "armador")) == ["ca_conflitante"]
+
+
+def test_cancelado_com_validade_passada_gera_vencido_e_cancelado(monkeypatch):
+    monkeypatch.setattr("heitor.dados.regras.consulta_ca", _fake_ca("CANCELADO", "2020-01-01"))
+    assert regras(audita_linha(L(1, "luva", date(2026, 11, 1), "1"), "armador")) == ["ca_cancelado", "ca_vencido"]
+
+
+def test_cancelado_com_validade_futura_gera_so_cancelado(monkeypatch):
+    monkeypatch.setattr("heitor.dados.regras.consulta_ca", _fake_ca("CANCELADO", "2030-01-01"))
+    assert regras(audita_linha(L(1, "luva", date(2026, 11, 1), "1"), "armador")) == ["ca_cancelado"]
+
+
+def test_validade_no_proprio_dia_nao_vence(monkeypatch):
+    monkeypatch.setattr("heitor.dados.regras.consulta_ca", _fake_ca("VÁLIDO", "2026-11-01"))
+    assert audita_linha(L(1, "luva", date(2026, 11, 1), "1"), "armador") == []

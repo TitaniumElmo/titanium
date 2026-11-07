@@ -26,23 +26,25 @@ def _normaliza_ca(texto):
 
 
 def _achados_de_ca(l, ca):
-    r = consulta_ca(ca, l.data or date.today())
+    hoje = date.today()
+    r = consulta_ca(ca, l.data or hoje)
     f, n = l.funcionario_id, l.linha
-    achados = []
     if not r["encontrado"]:
-        achados.append(_achado(f, n, "ca_nao_encontrado", "risco", "prova",
-                               f"linha {n}, CA {ca} não está na base", "confirmar o CA com o RH"))
-        return achados
+        return [_achado(f, n, "ca_nao_encontrado", "risco", "prova",
+                        f"linha {n}, CA {ca} não está na base", "confirmar o CA com o RH")]
     if r["conflito"]:
-        achados.append(_achado(f, n, "ca_conflitante", "risco", "corrigivel",
-                               f"linha {n}, CA {ca} com dados conflitantes na base", "técnico confere o CA"))
+        return [_achado(f, n, "ca_conflitante", "risco", "corrigivel",
+                        f"linha {n}, CA {ca} com dados conflitantes na base", "técnico confere o CA")]
+    achados = []
+    validade = date.fromisoformat(r["validade"])
+    if l.data and l.data > validade:
+        achados.append(_achado(f, n, "ca_vencido", "risco", "prova",
+                               f"linha {n}, CA {ca}: venceu em {validade:%d/%m/%Y}, antes da entrega em {l.data:%d/%m/%Y}",
+                               "pedir nota fiscal ao RH"))
     if r["situacao"].upper() in ("CANCELADO", "SUSPENSO"):
         achados.append(_achado(f, n, "ca_cancelado", "risco", "corrigivel",
                                f"linha {n}, CA {ca} {r['situacao'].lower()} na base",
                                "revisar o CA e trocar o EPI se preciso"))
-    elif l.data and not r["valido_na_data"]:
-        achados.append(_achado(f, n, "ca_vencido", "risco", "prova",
-                               f"linha {n}, CA {ca}: {r['motivo']}", "pedir nota fiscal ao RH"))
     return achados
 
 
