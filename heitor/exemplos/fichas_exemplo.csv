@@ -1,0 +1,13 @@
+funcionario_id,nome,funcao,data,epi,qtd,ca,motivo,assinatura
+0301,João Pereira Lima,pedreiro,2025-03-10,capacete,1,29637,E,sim
+0301,João Pereira Lima,pedreiro,2025-03-10,botina,1,9182,E,sim
+0301,João Pereira Lima,pedreiro,2025-03-10,protetor auditivo,1,17664,E,sim
+0301,João Pereira Lima,pedreiro,2025-06-02,óculos de proteção,1,10344,E,não
+0302,Rafael Souza Costa,servente,2024-02-05,capacete,1,29637,E,sim
+0302,Rafael Souza Costa,servente,2024-02-05,botina,1,28499,E,sim
+0302,Rafael Souza Costa,servente,2023-09-12,luva de raspa,1,,T,sim
+0303,Marcos Alves Ferreira,carpinteiro,2025-01-20,capacete,1,29637,E,sim
+0303,Marcos Alves Ferreira,carpinteiro,2025-01-20,botina,1,12844,E,sim
+0303,Marcos Alves Ferreira,carpinteiro,2025-01-20,óculos de proteção,1,10344,E,sim
+0304,Severino Batista Santos,armador,2024-05-15,luva de raspa,1,21245,E,sim
+0304,Severino Batista Santos,armador,2024-05-15,capacete,1,29637,E,sim
