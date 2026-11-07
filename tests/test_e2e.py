@@ -114,4 +114,4 @@ def test_e2e_ficha_de_papel_com_ia(monkeypatch):
     assert len(conferencias) <= 1
     # Log em sequência, começando pela conferência das assinaturas.
     assert [e.passo for e in eventos] == list(range(1, len(eventos) + 1))
-    assert any(e.ferramenta == "conferir_assinaturas" for e in eventos)
+    assert any(e.ferramenta == "conferir_ficha_de_papel" for e in eventos)

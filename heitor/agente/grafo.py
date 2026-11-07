@@ -94,9 +94,10 @@ class Execucao:
     """
 
     def __init__(self, auditoria_id: str, linhas: list[Any], emitir: EmitirEvento | None,
-                 fora_da_planilha: dict[str, list[dict]] | None = None):
+                 fora_da_planilha: dict[str, list[dict]] | None = None, fotos: dict[str, str] | None = None):
         self.auditoria_id = auditoria_id
         self.fora_da_planilha = fora_da_planilha or {}
+        self.fotos = {str(k): v for k, v in (fotos or {}).items()}
         self.emitir = emitir or (lambda e: None)
         self.por_funcionario: dict[str, list[Linha]] = defaultdict(list)
         todas = []
@@ -108,6 +109,7 @@ class Execucao:
         conferir_ca(todas)
         hipoteses_da_empresa(todas)
         conferir_datas(todas)
+        self.todas = todas
         self.achados: dict[str, Achado] = {}
         self.pendencias: list[Pendencia] = []
         self.pendencia_por_achado: dict[str, str] = {}
@@ -161,6 +163,7 @@ class Execucao:
             linhas={int(l["linha"]): l for l in linhas}, achados=self.achados, pendencias=self.pendencias,
             pendencia_por_achado=self.pendencia_por_achado, revisao=self.revisao,
             auditoria_id=self.auditoria_id, fora_da_planilha=self.fora_da_planilha.get(fid, []),
+            foto=self.fotos.get(fid), empresa=self.todas,
         )
         return self.ctx
 
@@ -204,6 +207,9 @@ def politica_deterministica(exe: Execucao) -> dict[str, Any]:
         return {"ferramenta": "exigencia_funcao", "args": {}, "pensamento": "ver o que a função exige"}
     if set(ctx.linhas) - ctx.linhas_auditadas or not ctx.funcionario_auditado:
         return {"ferramenta": "auditar_ficha", "args": {}, "pensamento": "auditar o histórico inteiro da ficha"}
+    if ctx.foto and not ctx.papel_conferido:
+        return {"ferramenta": "conferir_ficha_de_papel", "args": {},
+                "pensamento": "sem o LLM, confiro sempre a ficha de papel quando há foto (opção segura)"}
     for a in ctx.achados_do_funcionario():
         if precisa_pendencia(ctx, a):
             return {"ferramenta": "criar_pendencia", "args": {"achado_id": a["id"]},
@@ -396,8 +402,9 @@ def _gerar_relatorio(achados: list[Achado], exposicao: dict) -> dict | None:
 # ------------------------------------------------------- interface ---
 
 def rodar_auditoria(auditoria_id: str, linhas: list[Any], emitir_evento: EmitirEvento | None = None,
-                    fora_da_planilha: dict[str, list[dict]] | None = None, _passo_inicial: int = 0) -> dict:
-    exe = Execucao(auditoria_id, linhas, emitir_evento, fora_da_planilha)
+                    fora_da_planilha: dict[str, list[dict]] | None = None, _passo_inicial: int = 0,
+                    fotos: dict[str, str] | None = None) -> dict:
+    exe = Execucao(auditoria_id, linhas, emitir_evento, fora_da_planilha, fotos)
     exe.comp.passo = _passo_inicial  # o log continua a numeração de quem chamou (conferir_e_auditar)
     fids = list(exe.por_funcionario)
     paralelo = max(1, int(os.getenv("HEITOR_PARALELO", PARALELO_PADRAO)))
@@ -418,40 +425,14 @@ def rodar_auditoria(auditoria_id: str, linhas: list[Any], emitir_evento: EmitirE
 
 def conferir_e_auditar(auditoria_id: str, linhas: list[Any], fotos: dict[str, str],
                        emitir_evento: EmitirEvento | None = None) -> dict:
-    """Fluxo principal com ficha de papel: os dados vêm da PLANILHA; a foto só prova a assinatura.
+    """Fluxo com ficha de papel: os dados vêm da PLANILHA; a foto prova a assinatura.
 
     linhas: entregas da planilha (todas as fichas da auditoria).
     fotos:  {funcionario_id: caminho da foto da ficha de papel daquele funcionário}.
-    Para cada funcionário com foto, confere as assinaturas contra a planilha (conferencia_assinaturas)
-    e depois roda a auditoria normal. Fica aqui (e não na API) porque os campos internos da conferência
-    (tipo da assinatura, entrega sem linha na ficha) se perdem quando a linha passa pelo modelo Linha.
+    O AGENTE decide, por funcionário, se vale conferir a ficha de papel (ferramenta conferir_ficha_de_papel).
+    Sem LLM, a política determinística confere sempre que há foto.
     """
-    from heitor.agente.conferencia_assinaturas import conferir_assinaturas
-
-    todas = [_para_dict(x) for x in linhas]
-    log = Execucao(auditoria_id, [], emitir_evento)  # só para emitir os eventos da conferência no log
-    fora: dict[str, list[dict]] = {}
-    for fid, foto in fotos.items():
-        do_func = [l for l in todas if str(l.get("funcionario_id")) == str(fid)]
-        if not do_func:
-            continue
-        try:
-            r = conferir_assinaturas(foto, do_func)
-        except Exception as e:  # noqa: BLE001 — sem a conferência, as assinaturas ficam como vieram da planilha
-            log.evento("conferir_assinaturas", {"funcionario_id": fid}, {"erro": str(e)[:200]})
-            continue
-        por_linha = {l["linha"]: l for l in r["linhas"]}
-        for i, l in enumerate(todas):
-            if str(l.get("funcionario_id")) == str(fid) and l.get("linha") in por_linha:
-                todas[i] = por_linha[l["linha"]]
-        fora[str(fid)] = r["fora_da_planilha"]
-        resumo = {"entregas": len(r["linhas"]),
-                  "assinadas": sum(1 for l in r["linhas"] if l.get("assinatura") is True and l["confianca"].get("assinatura", 0) >= 0.7),
-                  "em_duvida": sum(1 for l in r["linhas"] if l["confianca"].get("assinatura", 0) < 0.7),
-                  "fora_da_planilha": len(r["fora_da_planilha"]), "custo_usd": r["custo_usd"]}
-        log.evento("conferir_assinaturas", {"funcionario_id": fid}, resumo, custo=r["custo_usd"],
-                   pensamento="a planilha diz o que foi entregue; a ficha de papel precisa provar com a assinatura")
-    return rodar_auditoria(auditoria_id, todas, emitir_evento, fora_da_planilha=fora, _passo_inicial=log.passo)
+    return rodar_auditoria(auditoria_id, linhas, emitir_evento, fotos=fotos)
 
 
 _REGRAS_DA_FICHA = {"epi_inadequado", "troca_atrasada"}

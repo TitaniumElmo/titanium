@@ -152,7 +152,7 @@ def test_conferir_e_auditar_com_ficha_de_papel():
     assert por_linha[2]["gravidade"] == "irregular" and por_linha[4]["gravidade"] == "irregular"
     assert "sem linha na ficha de papel" in por_linha[4]["evidencia"]
     assert 1 not in por_linha  # assinatura que confere não gera achado
-    assert eventos[0].tipo == "decisao" and eventos[1].ferramenta == "conferir_assinaturas"
+    assert any(e.ferramenta == "conferir_ficha_de_papel" for e in eventos)
     assert [e.passo for e in eventos] == list(range(1, len(eventos) + 1))
 
 

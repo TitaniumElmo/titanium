@@ -81,6 +81,9 @@ class Contexto:
     revisao: list[str] = field(default_factory=list)  # falhas que viraram pendência de revisão
     auditoria_id: str | None = None
     fora_da_planilha: list[dict[str, Any]] = field(default_factory=list)  # linhas do papel sem entrega na planilha
+    foto: str | None = None  # foto da ficha de papel deste funcionário, se houver
+    papel_conferido: bool = False
+    empresa: list[dict[str, Any]] = field(default_factory=list)  # todas as entregas da auditoria (só leitura)
 
     def achados_do_funcionario(self) -> list[Achado]:
         return [a for a in self.achados.values() if a.get("funcionario_id") == self.funcionario_id]
@@ -308,6 +311,66 @@ def _t_auditar_ficha(ctx: Contexto, args: dict) -> Resultado:
     })
 
 
+def _t_conferir_ficha_de_papel(ctx: Contexto, args: dict) -> Resultado:
+    """Confere a assinatura de cada entrega na foto da ficha de papel (a planilha diz o que foi entregue).
+
+    Custa ~25 s e alguns centavos: o agente decide quando vale (dúvida que muda o que precisa ser corrigido).
+    Reaudita só a assinatura das linhas; os outros achados não se repetem.
+    """
+    from heitor.agente import conferencia_assinaturas as CAS
+
+    if not ctx.foto:
+        return Resultado({"info": "não há foto da ficha de papel deste funcionário"}, ok=False)
+    if ctx.papel_conferido:
+        return Resultado({"info": "a ficha de papel deste funcionário já foi conferida"}, ok=False)
+    r = CAS.conferir_assinaturas(ctx.foto, list(ctx.linhas.values()))
+    ctx.papel_conferido = True
+    # O papel substitui a avaliação de assinatura feita só com a planilha (ainda sem pendência).
+    for a in list(ctx.achados_do_funcionario()):
+        if a.get("regra") == "assinatura_ausente" and a.get("linha") in ctx.linhas and a["id"] not in ctx.pendencia_por_achado:
+            ctx.achados.pop(a["id"], None)
+    ctx.fora_da_planilha = r["fora_da_planilha"]
+    novos: list[Achado] = []
+    for conferida in r["linhas"]:
+        n = conferida.get("linha")
+        if n not in ctx.linhas:
+            continue
+        ctx.linhas[n].update({k: conferida.get(k) for k in ("assinatura", "assinatura_tipo", "assinatura_texto",
+                                                              "na_ficha", "leitura_assinatura")})
+        ctx.linhas[n].setdefault("confianca", {})["assinatura"] = conferida["confianca"].get("assinatura", 0.0)
+        so_assinatura = [a for a in IMPL["audita_linha"](para_auditoria(ctx.linhas[n]), ctx.funcao)
+                         if a.get("regra") == "assinatura_ausente"]
+        novos += _registrar(ctx, so_assinatura)
+    linhas = r["linhas"]
+    return Resultado({
+        "entregas": len(linhas),
+        "assinadas": sum(1 for l in linhas if l.get("assinatura") is True and l["confianca"].get("assinatura", 0) >= 0.7),
+        "sem_assinatura_ou_em_duvida": [l["linha"] for l in linhas
+                                        if not (l.get("assinatura") is True and l["confianca"].get("assinatura", 0) >= 0.7)],
+        "linhas_no_papel_fora_da_planilha": r["fora_da_planilha"],
+        "novos_achados": [_resumo_achado(a) for a in novos],
+        "custo_usd": r["custo_usd"],
+    })
+
+
+def _t_historico_da_empresa(ctx: Contexto, args: dict) -> Resultado:
+    """Quais CAs a empresa usa para um tipo de EPI, quantas vezes e em quantos funcionários."""
+    from heitor.agente.conferencia_ca import familia
+
+    epi = str(args.get("epi") or "").strip()
+    fam = familia(epi)
+    if not fam:
+        return Resultado({"erro": f"tipo de EPI não reconhecido: '{epi}'"}, ok=False)
+    usos: dict[str, dict[str, Any]] = {}
+    for l in ctx.empresa:
+        if familia(l.get("epi")) == fam and l.get("ca"):
+            u = usos.setdefault(str(l["ca"]), {"ca": str(l["ca"]), "entregas": 0, "funcionarios": set()})
+            u["entregas"] += 1
+            u["funcionarios"].add(str(l.get("funcionario_id")))
+    cas = sorted(({**u, "funcionarios": len(u["funcionarios"])} for u in usos.values()), key=lambda u: -u["entregas"])
+    return Resultado({"tipo_de_epi": fam, "cas_usados_pela_empresa": cas[:8]})
+
+
 def _t_reextrair_campo(ctx: Contexto, args: dict) -> Resultado:
     from heitor.agente import extracao
 
@@ -393,6 +456,11 @@ FERRAMENTAS: dict[str, Ferramenta] = {f.nome: f for f in [
                "Audita o histórico inteiro do funcionário (todas as linhas e a ficha toda) e devolve as falhas "
                "separadas em: corrigir_agora, depende_de_prova, passivo e conferir_no_papel. É a fonte do veredito.",
                _t_auditar_ficha),
+    Ferramenta("conferir_ficha_de_papel", "conferir_ficha_de_papel()",
+               "Confere na FOTO da ficha de papel se cada entrega da planilha está assinada pelo funcionário. "
+               "Custa ~25 s: use quando a assinatura muda o que precisa ser corrigido.", _t_conferir_ficha_de_papel),
+    Ferramenta("historico_da_empresa", "historico_da_empresa(epi: str)",
+               "CAs que a empresa usa para este tipo de EPI (para julgar um CA estranho).", _t_historico_da_empresa),
     Ferramenta("audita_funcionario", "audita_funcionario()",
                "Regras que olham a ficha inteira: EPI exigido ausente e troca fora da vida útil.",
                _t_audita_funcionario),
