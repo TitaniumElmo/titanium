@@ -163,12 +163,57 @@ def _t_buscar_ca_proximo(ctx: Contexto, args: dict) -> Resultado:
                       "aviso": "suposição de baixa confiança: nunca gera irregular; vira pedido de confirmação"})
 
 
+GRUPO_CONFERIR_CA = "conferir_ca"
+
+
 def _registrar(ctx: Contexto, achados: list[Achado]) -> list[Achado]:
     for a in achados:
         a.setdefault("funcionario_id", ctx.funcionario_id)
         a.setdefault("auditoria_id", ctx.auditoria_id)
+        _marcar_conferencia_ca(ctx, a)
         ctx.achados[a["id"]] = a
     return achados
+
+
+def _marcar_conferencia_ca(ctx: Contexto, a: Achado) -> None:
+    """Achado de CA numa linha cujo CA não confere com o EPI: vira conferência no papel, agrupada por ficha.
+
+    Pode ser erro de leitura ou erro de registro (falha real do processo); só o papel diz qual.
+    """
+    linha = ctx.linhas.get(a.get("linha")) if a.get("linha") is not None else None
+    conf = (linha or {}).get("conferencia_ca")
+    if not linha or not conf or conf.get("confere") is not False or not str(a.get("regra", "")).startswith("ca_"):
+        return
+    a["grupo"] = GRUPO_CONFERIR_CA
+    hip = conf.get("hipotese")
+    if hip and "a empresa usa" not in a.get("evidencia", ""):
+        a["evidencia"] = (f"{a.get('evidencia', '')}; a empresa usa o CA {hip} para este EPI: se na ficha está "
+                          f"escrito {hip}, foi erro de leitura; se está escrito {linha.get('ca')}, o registro está errado")
+
+
+def criar_conferencia_ca(ctx: Contexto) -> Pendencia | None:
+    """Uma pendência por funcionário com todos os CAs a conferir na ficha física."""
+    grupo = [a for a in ctx.achados_do_funcionario()
+             if a.get("grupo") == GRUPO_CONFERIR_CA and a["id"] not in ctx.pendencia_por_achado]
+    if not grupo:
+        return None
+    itens = []
+    for a in sorted(grupo, key=lambda x: x.get("linha") or 0):
+        linha = ctx.linhas.get(a.get("linha")) or {}
+        conf = linha.get("conferencia_ca") or {}
+        if conf.get("hipotese"):
+            detalhe = f"lido {linha.get('ca')}, provável {conf['hipotese']}"
+        elif conf.get("equipamento"):  # o CA existe, mas é de outro EPI: CA ou descrição do EPI lidos errado, ou erro de registro
+            detalhe = f"CA {linha.get('ca')} é de {conf['equipamento'].lower()[:30]}, ficha diz '{linha.get('epi')}'"
+        else:
+            detalhe = f"lido {linha.get('ca')}, que não existe na base"
+        itens.append(f"linha {a.get('linha')}: {detalhe}")
+    acao = ("conferir na ficha física: " + "; ".join(itens)
+            + ". Se o escrito for diferente do lido, foi erro de leitura; se for igual, corrigir o registro")
+    p = criar_pendencia_validada(ctx, grupo[0], acao=acao[:300], destino="tecnico")
+    for a in grupo[1:]:
+        ctx.pendencia_por_achado[a["id"]] = p["id"]
+    return p
 
 
 def _t_audita_linha(ctx: Contexto, args: dict) -> Resultado:
@@ -216,6 +261,9 @@ def _t_criar_pendencia(ctx: Contexto, args: dict) -> Resultado:
         return Resultado({"erro": f"achado inexistente; achados deste funcionário: {ids}"}, ok=False)
     if achado.get("gravidade") == "ok":
         return Resultado({"erro": "achado ok não gera pendência"}, ok=False)
+    if achado.get("grupo") == GRUPO_CONFERIR_CA:
+        return Resultado({"erro": "CA a conferir no papel: essas conferências viram UMA pendência por ficha, "
+                                  "criada automaticamente no fim; não crie pendência para este achado"}, ok=False)
     if achado["id"] in ctx.pendencia_por_achado:
         return Resultado({"erro": f"já existe a pendência {ctx.pendencia_por_achado[achado['id']]}"}, ok=False)
     if achado.get("tipo") == "passivo" and achado.get("regra") not in PASSIVO_COM_ACAO:
@@ -225,8 +273,9 @@ def _t_criar_pendencia(ctx: Contexto, args: dict) -> Resultado:
     return Resultado(pendencia)
 
 
-def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, prazo_dias: Any = None) -> Pendencia:
-    destino = DESTINO_POR_TIPO.get(achado.get("tipo", ""), "tecnico")
+def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, prazo_dias: Any = None,
+                             destino: str | None = None) -> Pendencia:
+    destino = destino or DESTINO_POR_TIPO.get(achado.get("tipo", ""), "tecnico")
     acao = str(acao or achado.get("acao_sugerida") or "revisar o achado").strip()[:300]
     if _sugere_fraude(acao):
         acao = achado.get("acao_sugerida") or "revisar o achado"

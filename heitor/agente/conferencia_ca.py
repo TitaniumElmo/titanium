@@ -103,3 +103,27 @@ def aplicar(linhas: list[dict[str, Any]]) -> None:
         if r["confere"] is False:
             l.setdefault("confianca", {})["ca"] = min(l.get("confianca", {}).get("ca", 1.0), CONF_NAO_CONFERE)
             l["conferencia_ca"] = r  # campo interno: vai para a evidência do achado
+
+
+def hipoteses_da_empresa(linhas: list[dict[str, Any]]) -> None:
+    """Para cada CA que não confere, procura a hipótese mais provável nos CAs que a EMPRESA já usa.
+
+    Uma construtora compra poucos modelos de EPI: se a ficha diz "14664" (não existe) para protetor
+    e a empresa usa 17664 para protetor em outras linhas, a hipótese é 17664, a um dígito de distância.
+
+    NUNCA troca o CA: pode ser erro de leitura (está escrito 17664) ou erro de registro (está escrito
+    14664, falha real do processo). Só uma pessoa olhando o papel distingue. A hipótese vai para a
+    pendência, para a conferência levar segundos.
+    """
+    usados: dict[str, set[str]] = {}
+    for l in linhas:
+        fam = familia(l.get("epi"))
+        if l.get("ca") and fam and conferir(l["ca"], l.get("epi"))["confere"]:
+            usados.setdefault(fam, set()).add(l["ca"])
+    for l in linhas:
+        r = l.get("conferencia_ca")
+        if not r or r.get("confere") is not False:
+            continue
+        fam = familia(l.get("epi"))
+        candidatos = sorted(_candidatos(l["ca"]) & usados.get(fam or "", set()))
+        r["hipotese"] = candidatos[0] if len(candidatos) == 1 else None

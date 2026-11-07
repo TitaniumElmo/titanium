@@ -123,9 +123,8 @@ def audita_linha(linha: Linha, funcao: str) -> list[Achado]:
     conf_ca = linha.get("conferencia_ca")
     if ca and conf_ca and conf_ca.get("confere") is False:
         # PROPOSTA ao Gustavo/Pierre: regra "ca_nao_confere" no contrato. Leitura duvidosa nunca vira "CA vencido".
-        sug = f"; números parecidos que combinam com o EPI: {', '.join(conf_ca['sugestoes'][:3])}" if conf_ca["sugestoes"] else ""
         achados.append(_achado(linha, fid, "ca_nao_encontrado", "risco", "prova",
-                               f"linha {n}, {conf_ca['motivo']}{sug}", "confirmar o CA com o RH (nota fiscal)"))
+                               f"linha {n}, {conf_ca['motivo']}", "conferir o CA na ficha física"))
         return achados
     if not ca:
         achados.append(_achado(linha, fid, "ca_ausente", "risco", "prova",

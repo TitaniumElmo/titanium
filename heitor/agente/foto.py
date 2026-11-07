@@ -151,9 +151,14 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
     funcionario_id = re.sub(r"\D", "", matricula or "") or (nome or caminho.stem)
 
     linhas: list[LinhaDict] = []
-    for n, item in enumerate(bruto.get("linhas") or [], start=1):
+    n = 0
+    for item in bruto.get("linhas") or []:
         if not isinstance(item, dict):
             continue
+        # Linha fantasma: o modelo às vezes "lê" as linhas vazias da tabela. Sem data, EPI e CA não há entrega.
+        if not any(_campo(item.get(c))[0] for c in ("data", "epi", "ca")):
+            continue
+        n += 1
         conf: dict[str, float] = {}
         data_txt, est = _campo(item.get("data"))
         data = normalizar_data(data_txt) if data_txt else None
@@ -198,7 +203,9 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
         l["leitura_assinatura"] = {"a": a, "b": b}
         l["assinatura_texto"], l["assinatura_tipo"] = texto_b, tipo
 
-    conferir_ca(linhas)  # CA que não combina com o EPI fica com baixa confiança (nunca é trocado)
+    # CA que não combina com o EPI fica com baixa confiança. Testado e descartado: perguntar ao modelo
+    # "é 14664 ou 17664?" (ele repete a própria leitura). A hipótese vem dos CAs da empresa, no grafo.
+    conferir_ca(linhas)
 
     return {"linhas": linhas, "cabecalho": {"nome": nome, "matricula": matricula, "funcao": funcao},
             "custo_usd": round(custo, 6), "modelo": MODELO_VISAO}

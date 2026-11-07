@@ -29,6 +29,8 @@ from typing import Any, Optional, TypedDict
 from langgraph.graph import END, StateGraph
 
 from heitor.agente import ferramentas as F
+from heitor.agente.conferencia_ca import aplicar as conferir_ca
+from heitor.agente.conferencia_ca import hipoteses_da_empresa
 from heitor.agente.llm import ClienteLLM, LLMIndisponivel, extrair_json, llm_ligado
 from heitor.agente.tipos import AchadoDict as Achado, EmitirEvento, LinhaDict as Linha, PendenciaDict as Pendencia
 from heitor.contrato import Evento
@@ -59,6 +61,7 @@ Regras:
 4. Nunca sugira preencher, assinar ou alterar ficha antiga com data passada: isso é fraude.
 5. Campo com confiança < 0.7: use reextrair_campo antes de auditar a linha.
 6. CA não encontrado: use buscar_ca_proximo. Sugestão é suposição, nunca irregularidade.
+   Achado com "grupo": "conferir_ca" vira uma conferência no papel criada automaticamente: não crie pendência para ele.
 7. Você tem no máximo {LIMITE_PASSOS} passos. Quando acabar, chame terminei.
 
 Responda SOMENTE com um objeto JSON, sem texto fora dele:
@@ -74,9 +77,14 @@ class Execucao:
         self.auditoria_id = auditoria_id
         self.emitir = emitir or (lambda e: None)
         self.por_funcionario: dict[str, list[Linha]] = defaultdict(list)
+        todas = []
         for i, l in enumerate((_para_dict(x) for x in linhas), start=1):
             l.setdefault("linha", i)
             self.por_funcionario[str(l.get("funcionario_id", "?"))].append(l)
+            todas.append(l)
+        # CA × EPI com todas as fichas juntas: os CAs que a empresa usa viram hipótese para os que não conferem.
+        conferir_ca(todas)
+        hipoteses_da_empresa(todas)
         self.achados: dict[str, Achado] = {}
         self.pendencias: list[Pendencia] = []
         self.pendencia_por_achado: dict[str, str] = {}
@@ -131,7 +139,7 @@ class Execucao:
 
 
 def precisa_pendencia(ctx: F.Contexto, a: Achado) -> bool:
-    if a.get("gravidade") == "ok" or a["id"] in ctx.pendencia_por_achado:
+    if a.get("gravidade") == "ok" or a["id"] in ctx.pendencia_por_achado or a.get("grupo") == F.GRUPO_CONFERIR_CA:
         return False
     return a.get("tipo") != "passivo" or a.get("regra") in F.PASSIVO_COM_ACAO
 
@@ -252,6 +260,10 @@ def construir_grafo(exe: Execucao):
                 p = F.criar_pendencia_validada(ctx, a)
                 exe.evento("criar_pendencia", {"achado_id": a["id"]}, p,
                            pensamento="guarda-corpo: achado sem pendência")
+        p = F.criar_conferencia_ca(ctx)
+        if p:
+            exe.evento("criar_pendencia", {"grupo": F.GRUPO_CONFERIR_CA}, p,
+                       pensamento="CAs que não conferem com o EPI: uma conferência no papel para a ficha toda")
         return {}
 
     def consolidar(state: Estado) -> Estado:
