@@ -108,7 +108,8 @@ def audita_linha(linha: Linha, funcao: str) -> list[Achado]:
     tipo_ass = linha.get("assinatura_tipo")
     if tipo_ass in EXPLICACAO_ASSINATURA:
         texto = EXPLICACAO_ASSINATURA[tipo_ass].format(t=linha.get("assinatura_texto"))
-        gravidade = "irregular" if conf_ass >= 0.7 else "risco"
+        # Decisão do time: entrega sem linha na ficha (e linha fora da planilha) é risco, nunca irregular.
+        gravidade = "irregular" if conf_ass >= 0.7 and tipo_ass != "sem_linha_na_ficha" else "risco"
         achados.append(_achado(linha, fid, "assinatura_ausente", gravidade, "passivo" if gravidade == "irregular" else "prova",
                                f"linha {n}, {texto}", "conferir a assinatura na ficha física"))
     elif linha.get("assinatura") is None or (linha.get("assinatura") is False and conf_ass < 0.7):

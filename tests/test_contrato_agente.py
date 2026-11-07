@@ -149,7 +149,8 @@ def test_conferir_e_auditar_com_ficha_de_papel():
     assert "linha 3: assinatura em dúvida (lido 'Marcos')" in conf[0]["acao"]
     assert "linha no papel sem entrega na planilha: 2026-10-15 cinto de segurança" in conf[0]["acao"]
     por_linha = {a["linha"]: a for a in r["achados"] if a.get("regra") == "assinatura_ausente"}
-    assert por_linha[2]["gravidade"] == "irregular" and por_linha[4]["gravidade"] == "irregular"
+    assert por_linha[2]["gravidade"] == "irregular"
+    assert por_linha[4]["gravidade"] == "risco"  # decisão do time: sem linha na ficha é risco, nunca irregular
     assert "sem linha na ficha de papel" in por_linha[4]["evidencia"]
     assert 1 not in por_linha  # assinatura que confere não gera achado
     assert any(e.ferramenta == "conferir_ficha_de_papel" for e in eventos)
