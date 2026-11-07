@@ -48,9 +48,9 @@ _FONTES: dict[str, tuple[list[str], Callable]] = {
     "audita_linha": (["heitor.dados.regras"], stubs.audita_linha),
     "audita_funcionario": (["heitor.dados.regras"], stubs.audita_funcionario),
     "calcula_exposicao": (["heitor.dados.exposicao"], stubs.calcula_exposicao),
-    "criar_pendencia": (["heitor.api.estado", "heitor.api.notificacao"], stubs.criar_pendencia),
-    "fechar_pendencia": (["heitor.api.estado", "heitor.api.notificacao"], stubs.fechar_pendencia),
-    "obter_pendencia": (["heitor.api.estado"], stubs.obter_pendencia),
+    "criar_pendencia": (["heitor.api.ferramentas"], stubs.criar_pendencia),
+    "fechar_pendencia": (["heitor.api.ferramentas"], stubs.fechar_pendencia),
+    "obter_pendencia": (["heitor.api.ferramentas"], stubs.obter_pendencia),
 }
 
 IMPL: dict[str, Callable] = {}

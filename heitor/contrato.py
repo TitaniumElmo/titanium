@@ -36,6 +36,9 @@ Regra = Literal[
     "epi_inadequado",  # EPI exigido ausente ou de categoria errada
     "troca_atrasada",  # intervalo maior que a vida útil do fabricante
     "treinamento_ausente",
+    # O agente usa quando não consegue decidir; viram pendência de revisão.
+    "falha_de_ferramenta",  # ferramenta falhou duas vezes
+    "funcao_desconhecida",  # função fora da tabela função -> EPI
 ]
 
 # PROPOSTA: separa chamada de ferramenta, decisão do LLM e falha no log.

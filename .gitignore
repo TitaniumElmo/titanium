@@ -4,3 +4,7 @@ node_modules/
 data/
 __pycache__/
 *.pyc
+.pytest_cache/
+dados/*.txt
+dados/*.csv
+dados/*.gz
