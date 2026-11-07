@@ -303,7 +303,14 @@ def executar(nome: str, args: dict[str, Any], ctx: Contexto) -> Resultado:
 
 
 def _falha_vira_revisao(ctx: Contexto, nome: str, erro: Exception | None) -> Resultado:
-    achado: Achado = {"id": f"rev-{ctx.funcionario_id}-{len(ctx.revisao) + 1}", "funcionario_id": ctx.funcionario_id,
+    # Uma pendência de revisão por funcionário e ferramenta: sem a base CAEPI, cada linha falharia
+    # e o técnico receberia dezenas de avisos iguais sobre a mesma ficha.
+    id_revisao = f"rev-{ctx.funcionario_id}-{nome}"
+    if id_revisao in ctx.achados:
+        evidencia = ctx.achados[id_revisao]["evidencia"]
+        return Resultado({"erro": evidencia, "pendencia_de_revisao": ctx.pendencia_por_achado.get(id_revisao),
+                          "aviso": "falha repetida; a pendência de revisão já existe"}, ok=False)
+    achado: Achado = {"id": id_revisao, "funcionario_id": ctx.funcionario_id,
                       "auditoria_id": ctx.auditoria_id,
                       "linha": None, "regra": "falha_de_ferramenta", "gravidade": "risco", "tipo": "corrigivel",
                       "evidencia": f"{nome} falhou duas vezes: {type(erro).__name__}: {str(erro)[:150]}",
