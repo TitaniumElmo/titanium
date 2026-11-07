@@ -147,7 +147,7 @@ def test_sse_transmite_eventos_e_status(client):
 def test_relatorio(client):
     aud = auditar_exemplo(client)
     r = client.get(f"/auditorias/{aud['id']}/relatorio").json()
-    assert "exposição potencial máxima" in r["relatorio"].lower()
+    assert "exposição potencial máxima" in r["texto"].lower()
 
 
 def test_consulta_ca(client):

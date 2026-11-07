@@ -214,14 +214,14 @@ def rodar_auditoria(auditoria_id: str, linhas: list[Linha], emitir_evento: Calla
             )
             emitir("ferramenta", "audita_linha", {"linha": f.linha}, achado.model_dump(mode="json"))
             p = criar_pendencia(achado, f.destino, f.acao, date.today() + timedelta(days=f.prazo_dias))
-            emitir("ferramenta", "criar_pendencia", {"achado_id": achado.id, "destino": f.destino}, {"pendencia_id": p.id})
+            emitir("ferramenta", "criar_pendencia", {"achado_id": achado.id, "destino": f.destino}, {"pendencia_id": p["id"]})
             achados.append(achado)
 
         emitir("decisao", None, {}, "terminei", 0.0004)
     return achados
 
 
-def reauditar(pendencia_id: str, linhas: list[Linha]) -> list[Achado]:
+def reauditar(pendencia_id: str, linhas: list[Linha], emitir_evento: Optional[Callable[[Evento], None]] = None) -> list[Achado]:
     """Reaplica as regras às linhas novas e fecha ou reabre a pendência.
 
     Documento que não é ficha (nota fiscal, lista de presença) chega como
@@ -244,19 +244,20 @@ def reauditar(pendencia_id: str, linhas: list[Linha]) -> list[Achado]:
     return []
 
 
-def gerar_relatorio(achados: list[Achado]) -> str:
+def gerar_relatorio(achados: list[dict], exposicao: Optional[dict] = None) -> dict[str, Any]:
+    """Mesmo formato do relatório da Sofia, simplificado: {"texto": markdown}."""
     if not achados:
-        return "# Relatório do Heitor\n\nNenhuma lacuna encontrada na prova documental.\n"
+        return {"texto": "# Relatório do Heitor\n\nNenhuma lacuna encontrada na prova documental.\n"}
     partes = ["# Relatório do Heitor (stub)\n"]
     for a in achados:
         partes.append(
-            f"- **{a.regra}** ({a.gravidade}, {a.tipo}), funcionário {a.funcionario_id}: "
-            f"{a.evidencia}. Base: {a.norma or '-'}. Ação: {a.acao_sugerida}."
+            f"- **{a['regra']}** ({a['gravidade']}, {a['tipo']}), funcionário {a['funcionario_id']}: "
+            f"{a['evidencia']}. Base: {a.get('norma') or '-'}. Ação: {a['acao_sugerida']}."
         )
-    total = sum(a.exposicao_rs or 0 for a in achados)
+    total = sum(a.get("exposicao_rs") or 0 for a in achados)
     if total:
         partes.append(
             f"\nExposição potencial máxima, se a perícia confirmar a insalubridade: "
             f"R$ {total:,.2f} (salário mínimo usado: R$ {SALARIO_MINIMO_STUB:,.2f})."
         )
-    return "\n".join(partes) + "\n"
+    return {"texto": "\n".join(partes) + "\n"}

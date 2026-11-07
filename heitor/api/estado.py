@@ -29,25 +29,30 @@ class Estado:
         # Os contadores não zeram no reset: uma thread antiga que termine
         # depois do reset nunca gera um id repetido.
         self._contadores: dict[str, itertools.count] = defaultdict(lambda: itertools.count(1))
+        self._removidas: set[str] = set()  # auditorias apagadas pelo reset
         self.limpar()
 
     def limpar(self) -> None:
         with self._lock:
+            self._removidas |= set(getattr(self, "_auditorias", {}))
             self._auditorias: dict[str, Auditoria] = {}
             self._linhas: dict[str, list[Linha]] = {}
-            self._achados: dict[str, dict[str, Achado]] = {}  # auditoria -> id -> achado
+            self._achados: dict[str, dict[str, Achado]] = defaultdict(dict)  # auditoria -> id -> achado
             self._pendencias: dict[str, Pendencia] = {}
-            self._eventos: dict[str, list[Evento]] = {}
+            self._eventos: dict[str, list[Evento]] = defaultdict(list)
 
     def novo_id(self, prefixo: str) -> str:
         with self._lock:
             return f"{prefixo}-{next(self._contadores[prefixo])}"
 
-    def _existe(self, auditoria_id: Optional[str], o_que: str) -> bool:
-        if auditoria_id in self._auditorias:
-            return True
-        log.warning("%s ignorado: auditoria %s não existe (reset?)", o_que, auditoria_id)
-        return False
+    def _aceita(self, auditoria_id: Optional[str], o_que: str) -> bool:
+        """Descarta gravações de auditorias apagadas pelo reset (thread antiga
+        terminando depois). Auditoria desconhecida é aceita: o agente também roda
+        fora da API (testes e linha de comando da Sofia)."""
+        if auditoria_id in self._removidas:
+            log.warning("%s ignorado: auditoria %s foi apagada pelo reset", o_que, auditoria_id)
+            return False
+        return True
 
     # -- auditorias ---------------------------------------------------------
 
@@ -67,7 +72,7 @@ class Estado:
 
     def atualizar_auditoria(self, auditoria_id: str, **campos) -> None:
         with self._lock:
-            if self._existe(auditoria_id, "atualização de auditoria"):
+            if auditoria_id in self._auditorias:
                 aud = self._auditorias[auditoria_id]
                 self._auditorias[auditoria_id] = aud.model_copy(update=campos)
 
@@ -75,7 +80,7 @@ class Estado:
 
     def salvar_linhas(self, auditoria_id: str, linhas: list[Linha]) -> None:
         with self._lock:
-            if self._existe(auditoria_id, "linhas"):
+            if self._aceita(auditoria_id, "linhas"):
                 self._linhas[auditoria_id] = [l.model_copy(deep=True) for l in linhas]
 
     def obter_linhas(self, auditoria_id: str) -> list[Linha]:
@@ -86,7 +91,7 @@ class Estado:
 
     def salvar_achado(self, achado: Achado) -> None:
         with self._lock:
-            if self._existe(achado.auditoria_id, f"achado {achado.id}"):
+            if self._aceita(achado.auditoria_id, f"achado {achado.id}"):
                 self._achados[achado.auditoria_id][achado.id] = achado.model_copy(deep=True)
 
     def listar_achados(self, auditoria_id: str) -> list[Achado]:
@@ -95,7 +100,7 @@ class Estado:
 
     def obter_achado(self, achado_id: str, auditoria_id: Optional[str] = None) -> Optional[Achado]:
         with self._lock:
-            grupos = [self._achados.get(auditoria_id, {})] if auditoria_id else self._achados.values()
+            grupos = [self._achados.get(auditoria_id, {})] if auditoria_id else list(self._achados.values())
             for grupo in grupos:
                 if achado_id in grupo:
                     return grupo[achado_id].model_copy(deep=True)
@@ -105,7 +110,7 @@ class Estado:
 
     def salvar_pendencia(self, pendencia: Pendencia) -> None:
         with self._lock:
-            if pendencia.auditoria_id is None or self._existe(pendencia.auditoria_id, f"pendência {pendencia.id}"):
+            if self._aceita(pendencia.auditoria_id, f"pendência {pendencia.id}"):
                 self._pendencias[pendencia.id] = pendencia.model_copy(deep=True)
 
     def obter_pendencia(self, pendencia_id: str) -> Optional[Pendencia]:
@@ -135,7 +140,7 @@ class Estado:
 
     def registrar_evento(self, evento: Evento) -> None:
         with self._lock:
-            if self._existe(evento.auditoria_id, "evento"):
+            if self._aceita(evento.auditoria_id, "evento"):
                 self._eventos[evento.auditoria_id].append(evento.model_copy(deep=True))
 
     def eventos_desde(self, auditoria_id: str, inicio: int = 0) -> list[Evento]:

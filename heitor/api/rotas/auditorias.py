@@ -59,11 +59,18 @@ def resumo(auditoria_id: str) -> ResumoAuditoria:
         **aud.model_dump(),
         contagem_gravidade=dict(Counter(a.gravidade for a in achados)),
         contagem_tipo=dict(Counter(a.tipo for a in achados)),
-        exposicao_total_rs=round(sum(a.exposicao_rs or 0 for a in achados if a.tipo == "passivo"), 2),
+        exposicao_total_rs=_exposicao_total(aud, achados),
         pendencias_abertas=sum(p.status != "fechada" for p in pendencias),
         passos=sum(e.tipo != "erro" for e in eventos),
         custo_total_usd=round(sum(e.custo_usd for e in eventos), 6),
     )
+
+
+def _exposicao_total(aud: Auditoria, achados: list[Achado]) -> float:
+    """Usa o total calculado pelo agente (calcula_exposicao); senão, soma os achados."""
+    if aud.exposicao and aud.exposicao.get("total_brl") is not None:
+        return round(float(aud.exposicao["total_brl"]), 2)
+    return round(sum(a.exposicao_rs or 0 for a in achados if a.tipo == "passivo"), 2)
 
 
 @router.get("/{auditoria_id}/achados", response_model=list[Achado])
@@ -85,11 +92,18 @@ def achados(
 
 @router.get("/{auditoria_id}/relatorio")
 async def relatorio(auditoria_id: str) -> dict:
+    """Relatório com base legal. Sempre traz `texto`; o agente real traz também
+    `itens` (um por achado), `resumo`, `exposicao` e `aviso`."""
     aud = _auditoria_ou_404(auditoria_id)
     if aud.status == "processando":
         raise HTTPException(409, "auditoria ainda em andamento")
-    texto = await run_in_threadpool(integracao.gerar_relatorio, estado.listar_achados(auditoria_id))
-    return {"auditoria_id": auditoria_id, "formato": "markdown", "relatorio": texto}
+    rel = aud.relatorio
+    if rel is None:  # o agente não devolveu relatório: gera agora
+        achados = [a.model_dump(mode="json") for a in estado.listar_achados(auditoria_id)]
+        rel = await run_in_threadpool(integracao.gerar_relatorio, achados, aud.exposicao)
+    if isinstance(rel, str):
+        rel = {"texto": rel}
+    return {"auditoria_id": auditoria_id, **rel}
 
 
 @router.get("/{auditoria_id}/eventos")

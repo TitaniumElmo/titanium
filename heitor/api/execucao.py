@@ -17,7 +17,7 @@ from typing import Any, Callable, Optional, Union
 
 from heitor.api import ferramentas, integracao
 from heitor.api.estado import estado
-from heitor.contrato import Evento, Pendencia
+from heitor.contrato import Achado, Evento, Linha, Pendencia
 
 log = logging.getLogger("heitor.execucao")
 
@@ -55,6 +55,53 @@ def _erro(auditoria_id: Optional[str], funcionario_id: Optional[str], etapa: str
 
 
 # ---------------------------------------------------------------------------
+# Adaptadores: o agente pode devolver dicts com mais chaves que o contrato
+# ---------------------------------------------------------------------------
+
+
+def _ler(arquivo: str, auditoria_id: Optional[str], funcionario_id: Optional[str] = None) -> list[Linha]:
+    """extrair_ficha devolve list[Linha] ou {"linhas": [...], "mapeamento": ...}."""
+    bruto = com_retentativa(integracao.extrair_ficha, arquivo)
+    if isinstance(bruto, dict):
+        bruto = bruto.get("linhas", [])
+    linhas = []
+    for item in bruto or []:
+        try:
+            linhas.append(item if isinstance(item, Linha) else Linha.model_validate(item))
+        except Exception as exc:  # linha fora do contrato: avisa no log, não some calada
+            _erro(auditoria_id, funcionario_id, f"extrair_ficha({Path(arquivo).name})", exc)
+    return linhas
+
+
+def _achados(resultado: Any, auditoria_id: str) -> list[Achado]:
+    """rodar_auditoria devolve list[Achado] ou {"achados": [...], "exposicao": ..., ...}."""
+    brutos = resultado.get("achados", []) if isinstance(resultado, dict) else (resultado or [])
+    achados = []
+    for item in brutos:
+        try:
+            a = item if isinstance(item, Achado) else Achado.model_validate(item)
+        except Exception as exc:
+            _erro(auditoria_id, None, "rodar_auditoria (achado fora do contrato)", exc)
+            continue
+        achados.append(a.model_copy(update={"auditoria_id": a.auditoria_id or auditoria_id}))
+    return achados
+
+
+def _emissor(auditoria_id: str) -> Callable[[Union[Evento, dict]], None]:
+    """Callback para o agente. Força o auditoria_id certo (o reauditar da Sofia
+    usa um id próprio, "re-p-X", e o evento sumiria do log da auditoria)."""
+
+    def emitir(evento: Union[Evento, dict]) -> None:
+        if isinstance(evento, Evento):
+            evento = evento.model_copy(update={"auditoria_id": auditoria_id})
+        elif isinstance(evento, dict):
+            evento = {**evento, "auditoria_id": auditoria_id}
+        emitir_evento(auditoria_id, evento)
+
+    return emitir
+
+
+# ---------------------------------------------------------------------------
 # Auditoria
 # ---------------------------------------------------------------------------
 
@@ -69,7 +116,7 @@ def rodar_auditoria(auditoria_id: str, arquivos: list[str]) -> None:
         linhas = []
         for arquivo in arquivos:
             try:
-                linhas += com_retentativa(integracao.extrair_ficha, arquivo)
+                linhas += _ler(arquivo, auditoria_id)
             except Exception as exc:
                 log.exception("falha ao ler %s", arquivo)
                 _erro(auditoria_id, None, f"extrair_ficha({Path(arquivo).name})", exc)
@@ -77,12 +124,13 @@ def rodar_auditoria(auditoria_id: str, arquivos: list[str]) -> None:
 
         # Sem retentativa aqui: repetir o agente inteiro duplicaria eventos.
         # A retentativa por ferramenta é responsabilidade do laço do agente.
-        achados = integracao.rodar_auditoria(
-            auditoria_id, linhas, lambda e: emitir_evento(auditoria_id, e)
-        ) or []
-        for a in achados:
-            estado.salvar_achado(a.model_copy(update={"auditoria_id": a.auditoria_id or auditoria_id}))
-        estado.atualizar_auditoria(auditoria_id, status="concluida", concluida_em=datetime.now())
+        resultado = integracao.rodar_auditoria(auditoria_id, linhas, _emissor(auditoria_id))
+        for a in _achados(resultado, auditoria_id):
+            estado.salvar_achado(a)
+        extras = {}
+        if isinstance(resultado, dict):
+            extras = {k: resultado.get(k) for k in ("exposicao", "relatorio", "modo") if resultado.get(k) is not None}
+        estado.atualizar_auditoria(auditoria_id, status="concluida", concluida_em=datetime.now(), **extras)
     except Exception as exc:
         log.exception("auditoria %s falhou", auditoria_id)
         _erro(auditoria_id, None, "rodar_auditoria", exc)
@@ -116,8 +164,9 @@ def executar_reauditoria(pendencia_id: str, arquivo: str, nota: Optional[str] = 
                 "entrada": {"pendencia_id": pendencia_id, "arquivo": Path(arquivo).name},
                 "saida": "resposta recebida; reauditar com as mesmas regras",
             })
-        linhas = com_retentativa(integracao.extrair_ficha, arquivo)
-        com_retentativa(integracao.reauditar, pendencia_id, linhas)
+        linhas = _ler(arquivo, aud_id, func_id)
+        emitir = _emissor(aud_id) if aud_id else None
+        com_retentativa(integracao.reauditar, pendencia_id, linhas, emitir)
     except Exception as exc:
         log.exception("reauditoria da pendência %s falhou", pendencia_id)
         _erro(aud_id, func_id, "reauditar", exc)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +19,10 @@ class Auditoria(BaseModel):
     concluida_em: Optional[datetime] = None
     arquivos: list[str] = Field(default_factory=list)
     erro: Optional[str] = None
+    # Vindos do resultado de rodar_auditoria (agente), quando ele devolve.
+    exposicao: Optional[dict[str, Any]] = None  # {"total_brl", "salario_minimo", ...}
+    relatorio: Optional[dict[str, Any]] = None  # {"itens", "texto", ...}
+    modo: Optional[str] = None  # "llm" ou "deterministico"
 
 
 class ResumoAuditoria(Auditoria):
