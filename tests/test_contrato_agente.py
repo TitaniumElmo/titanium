@@ -114,6 +114,48 @@ def test_data_impossivel_vira_conferencia_e_nao_gera_achado_falso():
     assert all(l["data"] == "2023-06-02" for l in linhas)  # a data lida nunca é trocada
 
 
+def test_conferir_e_auditar_com_ficha_de_papel():
+    """Planilha + foto: assinaturas em dúvida, entrega sem linha e linha fora da planilha viram UMA conferência;
+    entrega sem linha com certeza vira achado; o log tem passos em sequência."""
+    from heitor.agente import conferencia_assinaturas as CA
+    from heitor.agente import grafo
+
+    def planilha(n, data, epi, ca):
+        return {"funcionario_id": "0310", "nome": "Fábio Nogueira Pires", "funcao": "servente", "linha": n,
+                "data": data, "epi": epi, "qtd": 1, "ca": ca, "motivo": "T", "assinatura": None, "origem": "planilha"}
+    linhas = [planilha(1, "2025-09-02", "capacete classe A", "29637"), planilha(2, "2025-09-02", "botina de segurança", "9182"),
+              planilha(3, "2025-12-15", "luva de raspa", "21245"), planilha(4, "2026-08-10", "protetor auricular plug", "17664")]
+
+    def falsa(_foto, do_func):  # o que a conferência de assinaturas devolveria para esta ficha
+        r = [dict(l) for l in do_func]
+        marca = {1: (True, 0.95, "nome_confere", "Fábio"), 2: (False, 0.95, "vazio", "vazio"),
+                 3: (False, 0.5, "outro_nome", "Marcos"), 4: (None, 0.95, "sem_linha_na_ficha", None)}
+        for l in r:
+            l["assinatura"], c, l["assinatura_tipo"], l["assinatura_texto"] = marca[l["linha"]]
+            l["confianca"] = {"assinatura": c}
+            l["na_ficha"] = l["assinatura_tipo"] != "sem_linha_na_ficha"
+        return {"linhas": r, "fora_da_planilha": [{"data": "2026-10-15", "epi": "cinto de segurança"}], "custo_usd": 0.0}
+
+    original = CA.conferir_assinaturas
+    CA.conferir_assinaturas = falsa
+    eventos = []
+    try:
+        with stubs_de_dados():
+            r = grafo.conferir_e_auditar("au-papel", linhas, {"0310": "ficha.jpg"}, eventos.append)
+    finally:
+        CA.conferir_assinaturas = original
+    conf = [p for p in r["pendencias"] if p["acao"].startswith("conferir na ficha física:")]
+    assert len(conf) == 1, [p["acao"] for p in r["pendencias"]]
+    assert "linha 3: assinatura em dúvida (lido 'Marcos')" in conf[0]["acao"]
+    assert "linha no papel sem entrega na planilha: 2026-10-15 cinto de segurança" in conf[0]["acao"]
+    por_linha = {a["linha"]: a for a in r["achados"] if a.get("regra") == "assinatura_ausente"}
+    assert por_linha[2]["gravidade"] == "irregular" and por_linha[4]["gravidade"] == "irregular"
+    assert "sem linha na ficha de papel" in por_linha[4]["evidencia"]
+    assert 1 not in por_linha  # assinatura que confere não gera achado
+    assert eventos[0].tipo == "decisao" and eventos[1].ferramenta == "conferir_assinaturas"
+    assert [e.passo for e in eventos] == list(range(1, len(eventos) + 1))
+
+
 if __name__ == "__main__":
     for nome, fn in list(globals().items()):
         if nome.startswith("test_"):
