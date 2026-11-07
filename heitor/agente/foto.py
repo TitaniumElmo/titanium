@@ -202,7 +202,9 @@ def reextrair_assinatura(arquivo: str | Path, linha: LinhaDict) -> dict[str, Any
     b = _texto_assinado(alvo.get("assinatura")) if alvo else None
     if b is None:
         return None
-    anteriores = [x for x in (linha.get("leitura_assinatura") or {}).values() if x is not None]
+    # O rastro A/B some quando a linha passa pelo modelo Linha da API; aí vale a leitura atual como voto.
+    rastro = linha.get("leitura_assinatura") or {"atual": linha.get("assinatura")}
+    anteriores = [x for x in rastro.values() if x is not None]
     votos = anteriores + [b]
     maioria = max(set(votos), key=votos.count)
     unanime = votos.count(maioria) == len(votos)
