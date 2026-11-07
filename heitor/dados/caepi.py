@@ -1,10 +1,41 @@
+"""Base CAEPI (Certificados de Aprovação de EPI, do MTE) e consulta de CA.
+
+A base NÃO vai para o Git (144 MB, acima do limite do GitHub). Para testar:
+
+1. Abra https://caepi.trabalho.gov.br/internet/consultacainternet.aspx
+2. Clique em "Base de dados do sistema CAEPI (Download)". O site gera um
+   arquivo RelatorioCA_<AAAAMMDD>_<HHMMSS>.csv (pode demorar uns minutos).
+3. Coloque o arquivo, sem renomear, na pasta dados/ da raiz do projeto.
+   Com mais de um, vale o mais recente.
+4. Rode `pytest -q`. Sem a base, os testes que dependem dela são pulados
+   ("CSV do CAEPI não está em dados/") e o consulta_ca avisa onde baixar.
+
+A base é um retrato do dia do download: cada CA vem só com a validade atual,
+sem histórico.
+"""
+
 import csv
 import re
 from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
 
-CAMINHO = Path(__file__).resolve().parents[2] / "dados" / "RelatorioCA_20261107_114519.csv"
+PASTA_DADOS = Path(__file__).resolve().parents[2] / "dados"
+SITE_CAEPI = "https://caepi.trabalho.gov.br/internet/consultacainternet.aspx"
+
+
+def base_mais_recente(pasta=PASTA_DADOS):
+    """Download mais recente da base em dados/.
+
+    O site do CAEPI gera um nome novo a cada download
+    (RelatorioCA_<AAAAMMDD>_<HHMMSS>.csv); em ordem alfabética, o último é o
+    mais novo. Sem nenhum arquivo, devolve um caminho que não existe.
+    """
+    arquivos = sorted(pasta.glob("RelatorioCA_*.csv"))
+    return arquivos[-1] if arquivos else pasta / "RelatorioCA_AAAAMMDD_HHMMSS.csv"
+
+
+CAMINHO = base_mais_recente()
 
 
 def parse_data(texto):
@@ -73,6 +104,11 @@ def resolver_ca(linhas):
 
 
 def carregar_base(caminho=CAMINHO):
+    if not Path(caminho).exists():
+        raise FileNotFoundError(
+            f"base CAEPI não encontrada em {Path(caminho).parent}: baixe em {SITE_CAEPI} "
+            "('Base de dados do sistema CAEPI (Download)') e coloque o RelatorioCA_*.csv em dados/"
+        )
     registros, quebrados = ler_base(caminho)
     grupos = agrupar_por_ca(registros)
     return {
