@@ -1,4 +1,6 @@
+import functools
 import itertools
+import re
 from datetime import date
 
 from heitor.contrato import Achado, Linha
@@ -19,11 +21,13 @@ def _achado(funcionario_id, linha, regra, gravidade, tipo, evidencia, acao):
     return Achado(**campos)
 
 
-def _achados_de_ca(l):
-    if not l.ca or not l.data:
-        return []
-    r = consulta_ca(l.ca, l.data)
-    f, n, ca = l.funcionario_id, l.linha, l.ca
+def _normaliza_ca(texto):
+    return "".join(re.findall(r"\d", str(texto or "")))
+
+
+def _achados_de_ca(l, ca):
+    r = consulta_ca(ca, l.data or date.today())
+    f, n = l.funcionario_id, l.linha
     achados = []
     if not r["encontrado"]:
         achados.append(_achado(f, n, "ca_nao_encontrado", "risco", "prova",
@@ -36,26 +40,55 @@ def _achados_de_ca(l):
         achados.append(_achado(f, n, "ca_cancelado", "risco", "corrigivel",
                                f"linha {n}, CA {ca} {r['situacao'].lower()} na base",
                                "revisar o CA e trocar o EPI se preciso"))
-    elif not r["valido_na_data"]:
+    elif l.data and not r["valido_na_data"]:
         achados.append(_achado(f, n, "ca_vencido", "risco", "prova",
                                f"linha {n}, CA {ca}: {r['motivo']}", "pedir nota fiscal ao RH"))
     return achados
 
 
+_OPCIONAIS_DO_ACHADO = ("auditoria_id", "norma", "exposicao_rs")
+
+
+def _achado_para_dict(a):
+    d = a.model_dump(mode="json")
+    for k in _OPCIONAIS_DO_ACHADO:
+        if d.get(k) is None:
+            d.pop(k, None)
+    return d
+
+
+def _aceita_dict(funcao_real):
+    """Entrada dict (agente) -> saida list[dict] no formato do stub; Linha -> list[Achado]."""
+    @functools.wraps(funcao_real)
+    def envelope(entrada, *args, **kwargs):
+        if isinstance(entrada, list):
+            como_dict = any(isinstance(l, dict) for l in entrada)
+            linhas = [Linha.model_validate(l) if isinstance(l, dict) else l for l in entrada]
+        else:
+            como_dict = isinstance(entrada, dict)
+            linhas = Linha.model_validate(entrada) if como_dict else entrada
+        achados = funcao_real(linhas, *args, **kwargs)
+        return [_achado_para_dict(a) for a in achados] if como_dict else achados
+    return envelope
+
+
+@_aceita_dict
 def audita_linha(linha: Linha, funcao: str) -> list[Achado]:
     f, n = linha.funcionario_id, linha.linha
     achados = []
     if linha.assinatura is False:
         achados.append(_achado(f, n, "assinatura_ausente", "irregular", "passivo",
                                f"linha {n}, sem assinatura", "colher assinatura nas próximas entregas"))
-    if not (linha.ca or "").strip():
+    ca = _normaliza_ca(linha.ca)
+    if not ca:
         achados.append(_achado(f, n, "ca_ausente", "risco", "prova",
                                f"linha {n}, campo CA vazio", "pedir nota fiscal ao RH"))
     else:
-        achados += _achados_de_ca(linha)
+        achados += _achados_de_ca(linha, ca)
     return achados
 
 
+@_aceita_dict
 def audita_funcionario(linhas: list[Linha], funcao: str, hoje=None) -> list[Achado]:
     if not linhas:
         return []
@@ -64,13 +97,13 @@ def audita_funcionario(linhas: list[Linha], funcao: str, hoje=None) -> list[Acha
 
     achados = []
     exig = exigencia_funcao(funcao)
-    if not exig:
+    if not exig["encontrada"]:
         achados.append(_achado(fid, None, "funcao_desconhecida", "risco", "corrigivel",
                                f"função '{funcao}' fora da tabela função → EPI",
                                "revisar a função do funcionário"))
         return achados
 
-    exigidos = exig["epis"]
+    exigidos = {e["epi"]: e["vida_util_dias"] for e in exig["epis"]}
     entregas = {}
     for l in linhas:
         cat = categoria_epi(l.epi)

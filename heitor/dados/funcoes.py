@@ -18,7 +18,14 @@ SINONIMOS = {
 
 
 def exigencia_funcao(funcao):
-    return FUNCOES.get((funcao or "").strip().lower())
+    f = FUNCOES.get((funcao or "").strip().lower())
+    if not f:
+        return {"funcao": funcao, "encontrada": False}
+    return {
+        "funcao": funcao, "encontrada": True,
+        "agente_nocivo": f["agente_nocivo"], "grau": f["grau"],
+        "epis": [{"epi": epi, "vida_util_dias": dias} for epi, dias in f["epis"].items()],
+    }
 
 
 def categoria_epi(nome):
