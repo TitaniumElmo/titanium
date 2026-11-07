@@ -81,7 +81,8 @@ def avaliar(pasta_fotos: Path, pasta_gab: Path, filtro: str = "", verboso: bool 
     t: dict = {"modelo": MODELO_VISAO, "fotos": 0, "falhas_leitura": 0, "linhas": 0, "nao_casadas": 0,
                "data": 0, "ca": 0, "ca_esperados": 0, "presente": 0, "presente_ok": 0, "alarme_falso": 0,
                "ausente": 0, "ausente_pega": 0, "deixou_passar": 0, "ambigua": 0, "ambigua_pega": 0,
-               "ambigua_aceita": 0, "ca_errado_sinalizado": 0, "ca_errado_silencioso": 0, "custo": 0.0, "segundos": 0.0, "por_foto": {}}
+               "ambigua_aceita": 0, "ca_errado_sinalizado": 0, "ca_errado_silencioso": 0, "lidas": 0, "revisao": 0,
+               "ca_corrigido_certo": 0, "ca_corrigido_errado": 0, "custo": 0.0, "segundos": 0.0, "por_foto": {}}
     for foto, esperadas in carregar(pasta_fotos, pasta_gab, filtro):
         t["fotos"] += 1
         inicio = time.time()
@@ -97,6 +98,9 @@ def avaliar(pasta_fotos: Path, pasta_gab: Path, filtro: str = "", verboso: bool 
         t["segundos"] += seg
         t["custo"] += r["custo_usd"]
         acertos_foto = 0
+        t["lidas"] += len(r["linhas"])
+        t["revisao"] += sum(any(l["confianca"].get(c, 1) < LIMIAR for c in ("assinatura", "ca", "data", "epi"))
+                            for l in r["linhas"])
         if verboso:
             print(f"\n== {foto.name}: {len(r['linhas'])} lidas, {len(esperadas)} esperadas ({seg:.0f}s, ${r['custo_usd']:.4f})")
         for esp, lida in casar(r["linhas"], esperadas):
@@ -115,6 +119,8 @@ def avaliar(pasta_fotos: Path, pasta_gab: Path, filtro: str = "", verboso: bool 
             aceitou = leu is True and conf >= LIMIAR
             t["data"] += lida.get("data") == esp.get("data")
             t["ca"] += bool(esp.get("ca")) and lida.get("ca") == esp.get("ca")
+            if lida.get("ca_lido_original"):
+                t["ca_corrigido_certo" if lida.get("ca") == esp.get("ca") else "ca_corrigido_errado"] += 1
             if esp.get("ca") and lida.get("ca") and lida.get("ca") != esp.get("ca"):
                 if lida["confianca"].get("ca", 1.0) < LIMIAR:
                     t["ca_errado_sinalizado"] += 1
@@ -150,7 +156,10 @@ def imprimir(t: dict) -> None:
     print(f"    assinadas aceitas: {t['presente_ok']}/{t['presente']} (alarme falso {t['alarme_falso']})")
     print(f"    SEM assinatura pegas: {t['ausente_pega']}/{t['ausente']}  ⚠️ deixou passar: {t['deixou_passar']}")
     print(f"    ambíguas pegas: {t['ambigua_pega']}/{t['ambigua']}  (aceitas como assinado: {t['ambigua_aceita']})")
-    print(f"    CA lido errado: sinalizado {t['ca_errado_sinalizado']} | ⚠️ em silêncio {t['ca_errado_silencioso']}")
+    print(f"    CA lido errado: sinalizado {t['ca_errado_sinalizado']} | ⚠️ em silêncio {t['ca_errado_silencioso']}"
+          f" | corrigido pela desambiguação: certo {t['ca_corrigido_certo']}, errado {t['ca_corrigido_errado']}")
+    lidas = t["lidas"] or 1
+    print(f"    linhas mandadas para revisão: {t['revisao']}/{t['lidas']} ({100 * t['revisao'] / lidas:.0f}%)")
 
 
 def main() -> None:

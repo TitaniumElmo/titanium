@@ -79,6 +79,27 @@ def test_falha_repetida_gera_uma_pendencia_de_revisao():
     assert len(revisoes) == len(funcionarios), [p["achado_id"] for p in revisoes]
 
 
+def test_cas_em_duvida_viram_uma_conferencia_por_ficha():
+    """CA lido que não confere com o EPI: nunca é trocado; vira UMA conferência no papel, com a hipótese da empresa."""
+    def l(fid, n, epi, ca):
+        return {"funcionario_id": fid, "nome": "Diego", "funcao": "carpinteiro", "linha": n, "data": "2026-09-01",
+                "epi": epi, "qtd": 1, "ca": ca, "motivo": "T", "assinatura": True, "origem": "teste"}
+    linhas = [l("0308", 1, "protetor auricular plug", "17664"), l("0308", 2, "protetor auricular plug", "14664"),
+              l("0308", 3, "protetor auricular plug", "14664"), l("0308", 4, "óculos de proteção", "10347"),
+              l("0309", 5, "óculos de proteção", "10344"),
+              l("0307", 6, "luva de raspa", "10344")]  # erro de registro plantado: CA de óculos numa luva
+    with stubs_de_dados():
+        r = rodar_auditoria("au-ca", linhas)
+    conferencias = [p for p in r["pendencias"] if p["acao"].startswith("conferir na ficha física:")]
+    diego = [p for p in conferencias if p["funcionario_id"] == "0308"]
+    assert len(diego) == 1, [p["acao"] for p in conferencias]
+    assert "provável 17664" in diego[0]["acao"] and "provável 10344" in diego[0]["acao"]
+    bruno = [p for p in conferencias if p["funcionario_id"] == "0307"]
+    assert len(bruno) == 1 and "provável" not in bruno[0]["acao"]  # erro real: sem hipótese de "correção"
+    assert {a["linha"]: a for a in r["achados"] if a["funcionario_id"] == "0307"}[6]["regra"].startswith("ca_")
+    assert all(x["ca"] == y["ca"] for x, y in zip(linhas, linhas))  # nenhum CA foi trocado
+
+
 if __name__ == "__main__":
     for nome, fn in list(globals().items()):
         if nome.startswith("test_"):
