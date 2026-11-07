@@ -202,11 +202,8 @@ def politica_deterministica(exe: Execucao) -> dict[str, Any]:
     assert ctx is not None
     if ctx.funcionario_id not in exe.consultou_exigencia:
         return {"ferramenta": "exigencia_funcao", "args": {}, "pensamento": "ver o que a função exige"}
-    pendentes = sorted(set(ctx.linhas) - ctx.linhas_auditadas)
-    if pendentes:
-        return {"ferramenta": "audita_linha", "args": {"linhas": pendentes}, "pensamento": "auditar as linhas"}
-    if not ctx.funcionario_auditado:
-        return {"ferramenta": "audita_funcionario", "args": {}, "pensamento": "regras da ficha inteira"}
+    if set(ctx.linhas) - ctx.linhas_auditadas or not ctx.funcionario_auditado:
+        return {"ferramenta": "auditar_ficha", "args": {}, "pensamento": "auditar o histórico inteiro da ficha"}
     for a in ctx.achados_do_funcionario():
         if precisa_pendencia(ctx, a):
             return {"ferramenta": "criar_pendencia", "args": {"achado_id": a["id"]},

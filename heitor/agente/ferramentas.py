@@ -277,6 +277,37 @@ def _t_audita_funcionario(ctx: Contexto, args: dict) -> Resultado:
     return Resultado({"achados": [_resumo_achado(a) for a in achados if a.get("gravidade") != "ok"] or "ok"})
 
 
+def _t_auditar_ficha(ctx: Contexto, args: dict) -> Resultado:
+    """O trabalho mecânico de uma vez: regras em todas as linhas ainda não auditadas e na ficha inteira.
+
+    Devolve as falhas organizadas para o agente DECIDIR: o que corrigir agora, o que depende de prova
+    (documento) e o passivo (já aconteceu, vai para o relatório). Os passos do LLM sobram para julgar.
+    """
+    faltam = sorted(set(ctx.linhas) - ctx.linhas_auditadas)
+    if faltam:
+        _t_audita_linha(ctx, {"linhas": faltam})
+    if not ctx.funcionario_auditado:
+        _t_audita_funcionario(ctx, {})
+    falhas = [a for a in ctx.achados_do_funcionario() if a.get("gravidade") != "ok"]
+    grupos: dict[str, list[dict[str, Any]]] = {"corrigir_agora": [], "depende_de_prova": [], "passivo": [], "conferir_no_papel": []}
+    for a in falhas:
+        r = _resumo_achado(a)
+        if a.get("grupo") == GRUPO_CONFERIR_CA:
+            grupos["conferir_no_papel"].append(r)
+        elif a.get("tipo") == "corrigivel" or (a.get("tipo") == "passivo" and a.get("regra") in PASSIVO_COM_ACAO):
+            grupos["corrigir_agora"].append(r)
+        elif a.get("tipo") == "prova":
+            grupos["depende_de_prova"].append(r)
+        else:
+            grupos["passivo"].append(r)
+    datas = sorted(str(l["data"]) for l in ctx.linhas.values() if l.get("data"))
+    return Resultado({
+        "linhas_auditadas": len(ctx.linhas), "periodo": f"{datas[0]} a {datas[-1]}" if datas else None,
+        "sem_falhas": not falhas, **{k: v for k, v in grupos.items() if v},
+        "observacao": "conferir_no_papel vira uma conferência automática no fim; não crie pendência para esses",
+    })
+
+
 def _t_reextrair_campo(ctx: Contexto, args: dict) -> Resultado:
     from heitor.agente import extracao
 
@@ -358,6 +389,10 @@ FERRAMENTAS: dict[str, Ferramenta] = {f.nome: f for f in [
     Ferramenta("audita_linha", 'audita_linha(linhas: list[int] | "1..6")',
                "Aplica as regras às linhas indicadas. É a ÚNICA fonte de veredito (irregular/risco/ok).",
                _t_audita_linha),
+    Ferramenta("auditar_ficha", "auditar_ficha()",
+               "Audita o histórico inteiro do funcionário (todas as linhas e a ficha toda) e devolve as falhas "
+               "separadas em: corrigir_agora, depende_de_prova, passivo e conferir_no_papel. É a fonte do veredito.",
+               _t_auditar_ficha),
     Ferramenta("audita_funcionario", "audita_funcionario()",
                "Regras que olham a ficha inteira: EPI exigido ausente e troca fora da vida útil.",
                _t_audita_funcionario),
@@ -390,9 +425,9 @@ def executar(nome: str, args: dict[str, Any], ctx: Contexto) -> Resultado:
 
 
 def _falha_vira_revisao(ctx: Contexto, nome: str, erro: Exception | None) -> Resultado:
-    # Uma pendência de revisão por funcionário e ferramenta: sem a base CAEPI, cada linha falharia
-    # e o técnico receberia dezenas de avisos iguais sobre a mesma ficha.
-    id_revisao = f"rev-{ctx.funcionario_id}-{nome}"
+    # Uma pendência de revisão por funcionário: sem a base CAEPI, auditar_ficha, audita_linha e a rede de
+    # segurança falhariam todas, e o técnico receberia vários avisos iguais sobre a mesma ficha.
+    id_revisao = f"rev-{ctx.funcionario_id}"
     if id_revisao in ctx.achados:
         evidencia = ctx.achados[id_revisao]["evidencia"]
         return Resultado({"erro": evidencia, "pendencia_de_revisao": ctx.pendencia_por_achado.get(id_revisao),
