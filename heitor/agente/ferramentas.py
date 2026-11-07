@@ -80,6 +80,7 @@ class Contexto:
     funcionario_auditado: bool = False
     revisao: list[str] = field(default_factory=list)  # falhas que viraram pendência de revisão
     auditoria_id: str | None = None
+    fora_da_planilha: list[dict[str, Any]] = field(default_factory=list)  # linhas do papel sem entrega na planilha
 
     def achados_do_funcionario(self) -> list[Achado]:
         return [a for a in self.achados.values() if a.get("funcionario_id") == self.funcionario_id]
@@ -182,6 +183,9 @@ def _marcar_conferencia_ca(ctx: Contexto, a: Achado) -> None:
     Pode ser erro de leitura ou erro de registro (falha real do processo); só o papel diz qual.
     """
     linha = ctx.linhas.get(a.get("linha")) if a.get("linha") is not None else None
+    if linha and a.get("regra") == "assinatura_ausente" and (linha.get("confianca") or {}).get("assinatura", 1.0) < 0.7:
+        a["grupo"] = GRUPO_CONFERIR_CA  # assinatura em dúvida: conferir no papel, junto com CAs e datas
+        return
     conf = (linha or {}).get("conferencia_ca")
     if not linha or not conf or conf.get("confere") is not False or not str(a.get("regra", "")).startswith("ca_"):
         return
@@ -203,6 +207,13 @@ def criar_conferencia(ctx: Contexto) -> Pendencia | None:
     itens = []
     for a in sorted(grupo, key=lambda x: x.get("linha") or 0):
         linha = ctx.linhas.get(a.get("linha")) or {}
+        if a.get("regra") == "assinatura_ausente":
+            if linha.get("assinatura_tipo") == "sem_linha_na_ficha":
+                itens.append(f"linha {a.get('linha')}: entrega de {linha.get('data')} ({linha.get('epi')}) não localizada na ficha")
+            else:
+                texto = linha.get("assinatura_texto")
+                itens.append(f"linha {a.get('linha')}: assinatura em dúvida" + (f" (lido '{texto}')" if texto else ""))
+            continue
         conf = linha.get("conferencia_ca") or {}
         if conf.get("hipotese"):
             detalhe = f"CA lido {linha.get('ca')}, provável {conf['hipotese']}"
@@ -221,6 +232,9 @@ def criar_conferencia(ctx: Contexto) -> Pendencia | None:
         quais = f"linhas {ns[0]}-{ns[-1]}" if len(ns) > 1 and ns == list(range(ns[0], ns[-1] + 1)) else \
             ("linha " + ", ".join(map(str, ns)))
         itens.append(f"{quais}: data lida {lida}" + (f", provável {hip}" if hip else "") + f" ({motivo})")
+    # Linha no papel sem entrega na planilha: depende de leitura aberta (datas frágeis), então só conferência.
+    for x in ctx.fora_da_planilha:
+        itens.append(f"linha no papel sem entrega na planilha: {x.get('data')} {x.get('epi')} (planilha desatualizada?)")
     if not itens:
         return None
     acao = ("conferir na ficha física: " + "; ".join(itens)
@@ -234,7 +248,7 @@ def criar_conferencia(ctx: Contexto) -> Pendencia | None:
                   "gravidade": "risco", "tipo": "corrigivel", "grupo": GRUPO_CONFERIR_CA,
                   "evidencia": "; ".join(itens)[:300], "acao_sugerida": "conferir na ficha física"}
         ctx.achados[ancora["id"]] = ancora
-    p = criar_pendencia_validada(ctx, ancora, acao=acao, destino="tecnico", limite=600)
+    p = criar_pendencia_validada(ctx, ancora, acao=acao, destino="tecnico", limite=900)
     for a in grupo[1:]:
         ctx.pendencia_por_achado[a["id"]] = p["id"]
     return p
