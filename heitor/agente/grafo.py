@@ -44,7 +44,7 @@ TEMPO_MAX_S = float(os.getenv("HEITOR_TEMPO_MAX_S", "600"))  # auditoria inteira
 MAX_ERROS_FORMATO = 2  # respostas sem JSON válido antes de a política assumir o passo
 PARALELO_PADRAO = 3  # funcionários auditados ao mesmo tempo (limite de chamadas simultâneas do Featherless)
 FALHAS_PARA_DESISTIR = 2  # funcionários seguidos com o LLM fora do ar antes de parar de tentar
-EVENTOS_DE_ERRO = {"modelo_indisponivel", "resposta_invalida"}
+EVENTOS_DE_ERRO = {"modelo_indisponivel", "resposta_invalida", "pendencia_recusada"}
 
 
 def _para_dict(obj: Any) -> dict[str, Any]:
@@ -335,13 +335,21 @@ def construir_grafo(exe: Execucao, com_consolidacao: bool = True):
             exe.evento("audita_funcionario", {}, r.saida, pensamento="guarda-corpo: regras da ficha inteira")
         for a in ctx.achados_do_funcionario():
             if precisa_pendencia(ctx, a):
-                p = F.criar_pendencia_validada(ctx, a)
+                try:
+                    p = F.criar_pendencia_validada(ctx, a)
+                except Exception as e:  # noqa: BLE001 — ex.: regra ainda fora do contrato; a auditoria segue
+                    exe.evento("pendencia_recusada", {"achado_id": a["id"]}, {"erro": f"{type(e).__name__}: {str(e)[:150]}"})
+                    continue
                 exe.evento("criar_pendencia", {"achado_id": a["id"]}, p,
                            pensamento="guarda-corpo: achado sem pendência")
-        p = F.criar_conferencia(ctx)
+        try:
+            p = F.criar_conferencia(ctx)
+        except Exception as e:  # noqa: BLE001
+            exe.evento("pendencia_recusada", {"grupo": F.GRUPO_CONFERIR_CA}, {"erro": f"{type(e).__name__}: {str(e)[:150]}"})
+            p = None
         if p:
             exe.evento("criar_pendencia", {"grupo": F.GRUPO_CONFERIR_CA}, p,
-                       pensamento="CAs ou datas que não fecham com o resto da ficha: uma conferência no papel")
+                       pensamento="o que não fecha entre ficha, planilha e base: uma conferência no papel")
         return {}
 
     def consolidar(state: Estado) -> Estado:

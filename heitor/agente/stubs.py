@@ -173,6 +173,13 @@ def audita_funcionario(linhas: list[Linha], funcao: str) -> list[Achado]:
     return achados
 
 
+def audita_fora_da_planilha(itens: list[dict[str, Any]], funcionario_id: str) -> list[Achado]:
+    """Mesma assinatura do heitor/dados/regras.py do Gustavo: linha do papel sem entrega na planilha (risco)."""
+    return [_achado(None, funcionario_id, "ficha_sem_planilha", "risco", "corrigivel",
+                    f"a ficha de papel mostra {i.get('epi')} em {i.get('data')} que não está na planilha de controle; conferir",
+                    "conferir a ficha de papel e a planilha de controle") for i in itens or []]
+
+
 SALARIO_MINIMO = 1621.00  # o mesmo do exposicao.py do Gustavo
 
 

@@ -18,6 +18,7 @@ from typing import Any, Callable
 
 from heitor.agente import stubs
 from heitor.agente.conferencia_datas import para_auditoria
+from heitor.agente.tipos import REGRAS_DO_CONTRATO
 from heitor.agente.tipos import AchadoDict as Achado, LinhaDict as Linha, PendenciaDict as Pendencia
 
 
@@ -48,6 +49,7 @@ _FONTES: dict[str, tuple[list[str], Callable]] = {
     "categoria_epi": (["heitor.dados.funcoes", "heitor.dados.regras"], stubs.categoria_epi),
     "audita_linha": (["heitor.dados.regras"], stubs.audita_linha),
     "audita_funcionario": (["heitor.dados.regras"], stubs.audita_funcionario),
+    "audita_fora_da_planilha": (["heitor.dados.regras"], stubs.audita_fora_da_planilha),
     "calcula_exposicao": (["heitor.dados.exposicao"], stubs.calcula_exposicao),
     "criar_pendencia": (["heitor.api.ferramentas"], stubs.criar_pendencia),
     "fechar_pendencia": (["heitor.api.ferramentas"], stubs.fechar_pendencia),
@@ -169,6 +171,8 @@ def _t_buscar_ca_proximo(ctx: Contexto, args: dict) -> Resultado:
 
 
 GRUPO_CONFERIR_CA = "conferir_ca"
+REGRAS_PAPEL_X_PLANILHA = {"entrega_sem_ficha", "ficha_sem_planilha"}  # do Gustavo; sempre risco
+REGRAS_DA_ASSINATURA = {"assinatura_ausente", "entrega_sem_ficha"}  # o que a conferência do papel reavalia
 
 
 def _registrar(ctx: Contexto, achados: list[Achado]) -> list[Achado]:
@@ -198,6 +202,9 @@ def _marcar_conferencia_ca(ctx: Contexto, a: Achado) -> None:
 
     Pode ser erro de leitura ou erro de registro (falha real do processo); só o papel diz qual.
     """
+    if a.get("regra") in REGRAS_PAPEL_X_PLANILHA:
+        a["grupo"] = GRUPO_CONFERIR_CA  # divergência entre papel e planilha: o técnico confere os dois
+        return
     linha = ctx.linhas.get(a.get("linha")) if a.get("linha") is not None else None
     if linha and a.get("regra") == "assinatura_ausente" and (linha.get("confianca") or {}).get("assinatura", 1.0) < 0.7:
         a["grupo"] = GRUPO_CONFERIR_CA  # assinatura em dúvida: conferir no papel, junto com CAs e datas
@@ -223,6 +230,12 @@ def criar_conferencia(ctx: Contexto) -> Pendencia | None:
     itens = []
     for a in sorted(grupo, key=lambda x: x.get("linha") or 0):
         linha = ctx.linhas.get(a.get("linha")) or {}
+        if a.get("regra") == "ficha_sem_planilha":
+            itens.append(f"linha no papel sem entrega na planilha: {a.get('evidencia')}")
+            continue
+        if a.get("regra") == "entrega_sem_ficha":
+            itens.append(f"linha {a.get('linha')}: entrega de {linha.get('data')} ({linha.get('epi')}) não localizada na ficha de papel")
+            continue
         if a.get("regra") == "assinatura_ausente":
             if linha.get("assinatura_tipo") == "sem_linha_na_ficha":
                 itens.append(f"linha {a.get('linha')}: entrega de {linha.get('data')} ({linha.get('epi')}) não localizada na ficha")
@@ -249,15 +262,18 @@ def criar_conferencia(ctx: Contexto) -> Pendencia | None:
             ("linha " + ", ".join(map(str, ns)))
         itens.append(f"{quais}: data lida {lida}" + (f", provável {hip}" if hip else "") + f" ({motivo})")
     # Linha no papel sem entrega na planilha: depende de leitura aberta (datas frágeis), então só conferência.
-    for x in ctx.fora_da_planilha:
+    # (com a audita_fora_da_planilha ligada, elas já vêm como achados acima; aqui só as que não viraram achado)
+    ja_listadas = any(a.get("regra") == "ficha_sem_planilha" for a in grupo)
+    for x in ([] if ja_listadas else ctx.fora_da_planilha):
         itens.append(f"linha no papel sem entrega na planilha: {x.get('data')} {x.get('epi')} (planilha desatualizada?)")
     if not itens:
         return None
     acao = ("conferir na ficha física: " + "; ".join(itens)
             + ". Se o escrito for diferente do lido, foi erro de leitura; se for igual, o registro está errado e vira achado")
-    if grupo:
-        ancora = grupo[0]
-    else:  # só datas em dúvida: um achado de risco para a pendência existir
+    validos = [a for a in grupo if a.get("regra") in REGRAS_DO_CONTRATO]
+    if validos:
+        ancora = validos[0]
+    else:  # só datas ou regras ainda fora do contrato: um achado de risco aceito pelo contrato ancora a pendência
         ancora = {"id": f"leitura-{ctx.funcionario_id}", "funcionario_id": ctx.funcionario_id,
                   "auditoria_id": ctx.auditoria_id, "linha": None,
                   "regra": "falha_de_ferramenta",  # PROPOSTA ao Pierre: regra "leitura_incerta"
@@ -265,7 +281,7 @@ def criar_conferencia(ctx: Contexto) -> Pendencia | None:
                   "evidencia": "; ".join(itens)[:300], "acao_sugerida": "conferir na ficha física"}
         ctx.achados[ancora["id"]] = ancora
     p = criar_pendencia_validada(ctx, ancora, acao=acao, destino="tecnico", limite=900)
-    for a in grupo[1:]:
+    for a in grupo:
         ctx.pendencia_por_achado[a["id"]] = p["id"]
     return p
 
@@ -342,7 +358,7 @@ def _t_conferir_ficha_de_papel(ctx: Contexto, args: dict) -> Resultado:
     ctx.papel_conferido = True
     # O papel substitui a avaliação de assinatura feita só com a planilha (ainda sem pendência).
     for a in list(ctx.achados_do_funcionario()):
-        if a.get("regra") == "assinatura_ausente" and a.get("linha") in ctx.linhas and a["id"] not in ctx.pendencia_por_achado:
+        if a.get("regra") in REGRAS_DA_ASSINATURA and a.get("linha") in ctx.linhas and a["id"] not in ctx.pendencia_por_achado:
             ctx.achados.pop(a["id"], None)
     ctx.fora_da_planilha = r["fora_da_planilha"]
     novos: list[Achado] = []
@@ -354,8 +370,9 @@ def _t_conferir_ficha_de_papel(ctx: Contexto, args: dict) -> Resultado:
                                                               "na_ficha", "leitura_assinatura")})
         ctx.linhas[n].setdefault("confianca", {})["assinatura"] = conferida["confianca"].get("assinatura", 0.0)
         so_assinatura = [a for a in IMPL["audita_linha"](para_auditoria(ctx.linhas[n]), ctx.funcao)
-                         if a.get("regra") == "assinatura_ausente"]
+                         if a.get("regra") in REGRAS_DA_ASSINATURA]
         novos += _registrar(ctx, so_assinatura)
+    novos += _registrar(ctx, IMPL["audita_fora_da_planilha"](r["fora_da_planilha"], ctx.funcionario_id))
     linhas = r["linhas"]
     return Resultado({
         "entregas": len(linhas),
