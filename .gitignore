@@ -8,3 +8,4 @@ __pycache__/
 dados/*.txt
 dados/*.csv
 dados/*.gz
+fotos_teste/
