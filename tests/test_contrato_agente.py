@@ -180,6 +180,7 @@ def test_disjuntor_do_llm(monkeypatch):
                                    0.0, 0, 0, "falso", 0.0)
 
         monkeypatch.setenv("HEITOR_LLM", "on")
+        monkeypatch.setenv("HEITOR_PARALELO", "1")  # o roteiro de falhas depende da ordem dos funcionários
         monkeypatch.setattr(grafo, "ClienteLLM", LLMFalso)
         linhas = [dict(l) for l in LINHAS]  # 3 funcionários
         with stubs_de_dados():

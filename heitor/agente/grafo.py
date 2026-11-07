@@ -19,8 +19,11 @@ Interface para o Pierre:
 
 from __future__ import annotations
 
+import copy
 import json
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -39,6 +42,7 @@ from heitor.contrato import Evento
 LIMITE_PASSOS = int(os.getenv("HEITOR_LIMITE_PASSOS", "12"))  # por funcionário
 TEMPO_MAX_S = float(os.getenv("HEITOR_TEMPO_MAX_S", "600"))  # auditoria inteira
 MAX_ERROS_FORMATO = 2  # respostas sem JSON válido antes de a política assumir o passo
+PARALELO_PADRAO = 3  # funcionários auditados ao mesmo tempo (limite de chamadas simultâneas do Featherless)
 FALHAS_PARA_DESISTIR = 2  # funcionários seguidos com o LLM fora do ar antes de parar de tentar
 EVENTOS_DE_ERRO = {"modelo_indisponivel", "resposta_invalida"}
 
@@ -72,8 +76,22 @@ Responda SOMENTE com um objeto JSON, sem texto fora dele:
 
 # ----------------------------------------------------------- execução ---
 
+class Compartilhado:
+    """Contadores da auditoria inteira, protegidos por trava: vários funcionários rodam em paralelo."""
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.passo = 0
+        self.custo_usd = 0.0
+        self.falhas_seguidas = 0
+
+
 class Execucao:
-    """O que vive fora do estado do grafo: dados, callbacks e o cliente LLM."""
+    """O que vive fora do estado do grafo: dados, callbacks e o cliente LLM.
+
+    Em paralelo, cada funcionário roda com uma CÓPIA rasa (episodio): contexto próprio, mas os mesmos
+    achados, pendências, cliente LLM e contadores (Compartilhado).
+    """
 
     def __init__(self, auditoria_id: str, linhas: list[Any], emitir: EmitirEvento | None,
                  fora_da_planilha: dict[str, list[dict]] | None = None):
@@ -96,13 +114,11 @@ class Execucao:
         self.revisao: list[str] = []
         self.consultou_exigencia: set[str] = set()
         self.resumos: dict[str, str] = {}
-        self.passo = 0
-        self.custo_usd = 0.0
+        self.comp = Compartilhado()
         self.inicio = time.monotonic()
         self.ctx: F.Contexto | None = None
         self.cliente: ClienteLLM | None = None
         self.modo = "deterministico"
-        self.falhas_seguidas = 0
         self.modo_por_funcionario: dict[str, str] = {}
         if llm_ligado():
             try:
@@ -110,6 +126,33 @@ class Execucao:
                 self.modo = "llm"
             except LLMIndisponivel:
                 pass
+
+    # contadores compartilhados (leitura simples; escrita sempre pelos métodos abaixo, com trava)
+    @property
+    def passo(self) -> int:
+        return self.comp.passo
+
+    @property
+    def custo_usd(self) -> float:
+        return self.comp.custo_usd
+
+    @property
+    def falhas_seguidas(self) -> int:
+        return self.comp.falhas_seguidas
+
+    def somar_custo(self, valor: float) -> None:
+        with self.comp.lock:
+            self.comp.custo_usd += valor
+
+    def registrar_falha_llm(self, falhou: bool) -> None:
+        with self.comp.lock:
+            self.comp.falhas_seguidas = self.comp.falhas_seguidas + 1 if falhou else 0
+
+    def episodio(self) -> "Execucao":
+        """Cópia rasa para rodar um funcionário em paralelo (contexto próprio, resto compartilhado)."""
+        c = copy.copy(self)
+        c.ctx = None
+        return c
 
     def novo_contexto(self, fid: str) -> F.Contexto:
         linhas = self.por_funcionario[fid]
@@ -131,15 +174,17 @@ class Execucao:
         self._emitir(tipo, ferramenta, entrada, saida, custo)
 
     def _emitir(self, tipo: str, ferramenta: str | None, entrada: dict, saida: Any, custo: float) -> None:
-        self.passo += 1
-        try:
-            ev = Evento(auditoria_id=self.auditoria_id, passo=self.passo, tipo=tipo, ferramenta=ferramenta,
-                        entrada=entrada if isinstance(entrada, dict) else {}, saida=saida,
-                        custo_usd=round(custo, 8), ts=datetime.now(),
-                        funcionario_id=self.ctx.funcionario_id if self.ctx else None)
-            self.emitir(ev)
-        except Exception:  # noqa: BLE001 — log quebrado não derruba a auditoria
-            pass
+        # Numera e emite sob a trava: com funcionários em paralelo, o log continua 1, 2, 3... e em ordem.
+        with self.comp.lock:
+            self.comp.passo += 1
+            try:
+                ev = Evento(auditoria_id=self.auditoria_id, passo=self.comp.passo, tipo=tipo, ferramenta=ferramenta,
+                            entrada=entrada if isinstance(entrada, dict) else {}, saida=saida,
+                            custo_usd=round(custo, 8), ts=datetime.now(),
+                            funcionario_id=self.ctx.funcionario_id if self.ctx else None)
+                self.emitir(ev)
+            except Exception:  # noqa: BLE001 — log quebrado não derruba a auditoria
+                pass
 
     def tempo_esgotado(self) -> bool:
         return time.monotonic() - self.inicio > TEMPO_MAX_S
@@ -192,7 +237,7 @@ def _mensagem_ficha(ctx: F.Contexto) -> str:
             "Audite esta ficha.")
 
 
-def construir_grafo(exe: Execucao):
+def construir_grafo(exe: Execucao, com_consolidacao: bool = True):
     def proximo_funcionario(state: Estado) -> Estado:
         fila = state.get("fila", [])
         if not fila:
@@ -219,7 +264,7 @@ def construir_grafo(exe: Execucao):
             resp = exe.cliente.completar(mensagens)  # type: ignore[union-attr]
         except LLMIndisponivel as e:
             # Modo degradado só neste funcionário; o próximo tenta o LLM de novo (queda passageira não estraga tudo).
-            exe.falhas_seguidas += 1
+            exe.registrar_falha_llm(True)
             exe.modo_por_funcionario[exe.ctx.funcionario_id] = "degradado"  # type: ignore[union-attr]
             desiste = exe.falhas_seguidas >= FALHAS_PARA_DESISTIR
             exe.evento("modelo_indisponivel", {}, {
@@ -227,8 +272,8 @@ def construir_grafo(exe: Execucao):
                 "agora": "LLM indisponível: este funcionário segue com a política determinística (modo degradado)"
                          + ("; os próximos também, depois de falhas seguidas" if desiste else "; o próximo tenta o LLM de novo")})
             return {"acao": politica_deterministica(exe), "degradado": True}
-        exe.falhas_seguidas = 0
-        exe.custo_usd += resp.custo_usd
+        exe.registrar_falha_llm(False)
+        exe.somar_custo(resp.custo_usd)
         try:
             obj = extrair_json(resp.texto)
             acao = {"ferramenta": str(obj.get("ferramenta", "")).strip(), "args": obj.get("args") or {},
@@ -285,37 +330,43 @@ def construir_grafo(exe: Execucao):
         return {}
 
     def consolidar(state: Estado) -> Estado:
-        exe.ctx = None
-        achados = list(exe.achados.values())
-        # A exposição real (Gustavo) usa a função de cada funcionário (grau) e a data de cada achado (meses).
-        funcoes = {fid: str(ls[0].get("funcao", "")) for fid, ls in exe.por_funcionario.items() if ls}
-        for a in achados:
-            a.setdefault("data", _data_do_achado(exe, a))
-        exposicao = F.IMPL["calcula_exposicao"](achados, funcoes=funcoes)
-        exe.evento("calcula_exposicao", {"achados": len(achados), "funcoes": funcoes}, exposicao)
-        relatorio = _gerar_relatorio(achados, exposicao)
-        if relatorio is not None:
-            exe.evento("gerar_relatorio", {"achados": len(achados)}, {"itens": len(relatorio.get("itens", []))})
-        cont = {g: sum(1 for a in achados if a.get("gravidade") == g) for g in ("irregular", "risco")}
-        return {"resultado": {
-            "auditoria_id": exe.auditoria_id, "status": "concluida", "modo": _modo_final(exe),
-            "modo_por_funcionario": exe.modo_por_funcionario,
-            "contagem": cont, "achados": achados, "pendencias": exe.pendencias, "exposicao": exposicao,
-            "relatorio": relatorio, "passos": exe.passo, "custo_usd": round(exe.custo_usd, 6),
-            "duracao_s": round(time.monotonic() - exe.inicio, 1), "stubs": F.usando_stubs(),
-        }}
+        return {"resultado": _consolidar(exe)}
 
     g = StateGraph(Estado)
     for nome, fn in [("proximo_funcionario", proximo_funcionario), ("modelo", modelo),
                      ("ferramentas", ferramentas), ("fim_episodio", fim_episodio), ("consolidar", consolidar)]:
         g.add_node(nome, fn)
     g.set_entry_point("proximo_funcionario")
-    g.add_conditional_edges("proximo_funcionario", lambda s: "modelo" if s.get("atual") else "consolidar")
+    fim = "consolidar" if com_consolidacao else END
+    g.add_conditional_edges("proximo_funcionario", lambda s: "modelo" if s.get("atual") else fim)
     g.add_conditional_edges("modelo", lambda s: "ferramentas" if s.get("acao") else "modelo")
     g.add_conditional_edges("ferramentas", lambda s: "fim_episodio" if s.get("terminou") else "modelo")
     g.add_edge("fim_episodio", "proximo_funcionario")
     g.add_edge("consolidar", END)
     return g.compile()
+
+
+def _consolidar(exe: Execucao) -> dict[str, Any]:
+    """Depois de todos os funcionários: exposição em R$, relatório e o resultado da auditoria."""
+    exe.ctx = None
+    achados = list(exe.achados.values())
+    # A exposição real (Gustavo) usa a função de cada funcionário (grau) e a data de cada achado (meses).
+    funcoes = {fid: str(ls[0].get("funcao", "")) for fid, ls in exe.por_funcionario.items() if ls}
+    for a in achados:
+        a.setdefault("data", _data_do_achado(exe, a))
+    exposicao = F.IMPL["calcula_exposicao"](achados, funcoes=funcoes)
+    exe.evento("calcula_exposicao", {"achados": len(achados), "funcoes": funcoes}, exposicao)
+    relatorio = _gerar_relatorio(achados, exposicao)
+    if relatorio is not None:
+        exe.evento("gerar_relatorio", {"achados": len(achados)}, {"itens": len(relatorio.get("itens", []))})
+    cont = {g: sum(1 for a in achados if a.get("gravidade") == g) for g in ("irregular", "risco")}
+    return {
+        "auditoria_id": exe.auditoria_id, "status": "concluida", "modo": _modo_final(exe),
+        "modo_por_funcionario": exe.modo_por_funcionario,
+        "contagem": cont, "achados": achados, "pendencias": exe.pendencias, "exposicao": exposicao,
+        "relatorio": relatorio, "passos": exe.passo, "custo_usd": round(exe.custo_usd, 6),
+        "duracao_s": round(time.monotonic() - exe.inicio, 1), "stubs": F.usando_stubs(),
+    }
 
 
 def _modo_final(exe: Execucao) -> str:
@@ -350,11 +401,22 @@ def _gerar_relatorio(achados: list[Achado], exposicao: dict) -> dict | None:
 def rodar_auditoria(auditoria_id: str, linhas: list[Any], emitir_evento: EmitirEvento | None = None,
                     fora_da_planilha: dict[str, list[dict]] | None = None, _passo_inicial: int = 0) -> dict:
     exe = Execucao(auditoria_id, linhas, emitir_evento, fora_da_planilha)
-    exe.passo = _passo_inicial  # o log continua a numeração de quem chamou (conferir_e_auditar)
-    grafo = construir_grafo(exe)
-    limite = len(exe.por_funcionario) * (LIMITE_PASSOS * 2 + 8) + 10
-    final = grafo.invoke({"fila": list(exe.por_funcionario)}, {"recursion_limit": limite})
-    return final["resultado"]
+    exe.comp.passo = _passo_inicial  # o log continua a numeração de quem chamou (conferir_e_auditar)
+    fids = list(exe.por_funcionario)
+    paralelo = max(1, int(os.getenv("HEITOR_PARALELO", PARALELO_PADRAO)))
+    if paralelo == 1 or len(fids) <= 1:
+        limite = len(fids) * (LIMITE_PASSOS * 2 + 8) + 10
+        return construir_grafo(exe).invoke({"fila": fids}, {"recursion_limit": limite})["resultado"]
+
+    # Um grafo por funcionário, até `paralelo` ao mesmo tempo; a consolidação roda uma vez no fim.
+    def episodio(fid: str) -> None:
+        ep = exe.episodio()
+        construir_grafo(ep, com_consolidacao=False).invoke({"fila": [fid]}, {"recursion_limit": LIMITE_PASSOS * 2 + 18})
+
+    with ThreadPoolExecutor(max_workers=paralelo) as pool:
+        for f in [pool.submit(episodio, fid) for fid in fids]:
+            f.result()  # propaga exceção inesperada (as esperadas já viram pendência de revisão)
+    return _consolidar(exe)
 
 
 def conferir_e_auditar(auditoria_id: str, linhas: list[Any], fotos: dict[str, str],
