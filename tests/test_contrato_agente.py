@@ -100,6 +100,20 @@ def test_cas_em_duvida_viram_uma_conferencia_por_ficha():
     assert all(x["ca"] == y["ca"] for x, y in zip(linhas, linhas))  # nenhum CA foi trocado
 
 
+def test_data_impossivel_vira_conferencia_e_nao_gera_achado_falso():
+    """Entrega lida em 2023 para admissão em 2025: data em dúvida, hipótese 2025, e nenhuma troca atrasada falsa."""
+    linhas = [{"funcionario_id": "0312", "nome": "Thiago", "funcao": "armador", "linha": n, "data": "2023-06-02",
+               "data_admissao": "2025-06-02", "epi": epi, "qtd": 1, "ca": ca, "motivo": "1", "assinatura": True,
+               "origem": "teste"} for n, (epi, ca) in enumerate([("protetor auricular plug", "17664"),
+                                                                 ("luva de raspa", "21245")], start=1)]
+    with stubs_de_dados():
+        r = rodar_auditoria("au-data", linhas)
+    conf = [p for p in r["pendencias"] if p["acao"].startswith("conferir na ficha física:")]
+    assert len(conf) == 1 and "linhas 1-2: data lida 2023-06-02, provável 2025-06-02" in conf[0]["acao"]
+    assert not [a for a in r["achados"] if a["regra"] == "troca_atrasada" and "2023" in a["evidencia"]]
+    assert all(l["data"] == "2023-06-02" for l in linhas)  # a data lida nunca é trocada
+
+
 if __name__ == "__main__":
     for nome, fn in list(globals().items()):
         if nome.startswith("test_"):
