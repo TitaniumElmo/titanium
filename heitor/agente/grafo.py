@@ -116,8 +116,12 @@ class Execucao:
         self.emitir = emitir or (lambda e: None)
         self.por_funcionario: dict[str, list[Linha]] = defaultdict(list)
         todas = []
+        self.incompletas: list[Linha] = []  # sem data e sem EPI: não entram nas regras (viram "revisar a linha")
         for i, l in enumerate((_para_dict(x) for x in linhas), start=1):
             l.setdefault("linha", i)
+            if linha_incompleta(l):
+                self.incompletas.append(l)
+                continue
             self.por_funcionario[str(l.get("funcionario_id", "?"))].append(l)
             todas.append(l)
         # CA × EPI com todas as fichas juntas: os CAs que a empresa usa viram hipótese para os que não conferem.
@@ -394,9 +398,40 @@ def construir_grafo(exe: Execucao, com_consolidacao: bool = True):
     return g.compile()
 
 
+def linha_incompleta(l: Linha) -> bool:
+    """Linha sem data e sem EPI: a planilha não foi lida direito (ex.: tudo colado na coluna A).
+
+    Auditar uma linha assim acusaria "assinatura ausente" de um registro que nem foi lido.
+    """
+    return not l.get("data") and not str(l.get("epi") or "").strip()
+
+
+def _revisar_incompletas(exe: Execucao) -> None:
+    """Cada linha incompleta vira risco "revisar a linha da planilha", nunca acusação."""
+    for l in exe.incompletas:
+        fid, n = str(l.get("funcionario_id") or "?"), l.get("linha")
+        achado: Achado = {
+            "id": f"incompleta-{fid}-{n}", "auditoria_id": exe.auditoria_id, "funcionario_id": fid, "linha": n,
+            "regra": "leitura_incerta", "gravidade": "risco", "tipo": "corrigivel",
+            "evidencia": f"linha {n} da planilha sem data e sem EPI (colunas não separadas?); nada foi auditado nela",
+            "acao_sugerida": f"revisar a linha {n} da planilha: separar os dados nas colunas",
+        }
+        exe.achados[achado["id"]] = achado
+        ctx = F.Contexto(funcionario_id=fid, funcao="", linhas={}, achados=exe.achados, pendencias=exe.pendencias,
+                         pendencia_por_achado=exe.pendencia_por_achado, auditoria_id=exe.auditoria_id)
+        try:
+            p = F.criar_pendencia_validada(ctx, achado, destino="tecnico")
+        except Exception as e:  # noqa: BLE001
+            exe.evento("pendencia_recusada", {"achado_id": achado["id"]}, {"erro": type(e).__name__})
+            continue
+        exe.evento("criar_pendencia", {"achado_id": achado["id"]}, p,
+                   pensamento="guarda-corpo: linha incompleta na planilha não é auditada; pedir revisão")
+
+
 def _consolidar(exe: Execucao) -> dict[str, Any]:
     """Depois de todos os funcionários: exposição em R$, relatório e o resultado da auditoria."""
     exe.ctx = None
+    _revisar_incompletas(exe)
     achados = list(exe.achados.values())
     # A exposição real (Gustavo) usa a função de cada funcionário (grau) e a data de cada achado (meses).
     funcoes = {fid: str(ls[0].get("funcao", "")) for fid, ls in exe.por_funcionario.items() if ls}

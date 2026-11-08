@@ -244,3 +244,27 @@ def test_paralelo_da_o_mesmo_resultado_e_nao_compartilha_achados(monkeypatch):
         monkeypatch.setenv("HEITOR_PARALELO", "6")
         for i in range(3):
             assert chave(rodar_auditoria(f"au-par-{i}", [dict(l) for l in linhas])) == chave(sequencial)
+
+
+def test_linha_colada_na_coluna_a_vira_revisao_e_nao_acusacao():
+    """Revisão do Pierre (08/11): uma colagem sem dividir em colunas virou o funcionário "301,João…"
+    com "assinatura ausente (irregular)". Agora vira um risco "revisar a linha da planilha"."""
+    from heitor.agente.extracao import extrair_linhas
+
+    cab = ["funcionario_id", "nome", "funcao", "data", "epi", "qtd", "ca", "motivo", "assinatura"]
+    boa = ["0302", "Rafael Souza Costa", "servente", "2026-10-01", "protetor auditivo", "1", "17664", "E", "sim"]
+    colada = ["301,João Silva,servente,2026-10-01,protetor auditivo,1,17664,E,sim", "", "", "", "", "", "", "", ""]
+    mapa = {"mapeamento": {c: {"coluna": c, "indice": i, "confianca": 1.0, "origem": "teste"} for i, c in enumerate(cab)},
+            "nao_mapeados": [], "baixa_confianca": [], "custo_usd": 0, "origem": "teste"}
+    linhas = extrair_linhas(cab, [boa, colada], "t.csv", mapeamento=mapa)["linhas"]
+    for l in linhas:
+        Linha.model_validate(l)
+    assert linhas[1]["funcionario_id"] == "301" and linhas[1]["nome"] == "João Silva"
+
+    with stubs_de_dados():
+        r = rodar_auditoria("au-incompleta", linhas)
+    do_joao = [a for a in r["achados"] if a["funcionario_id"] == "301"]
+    assert [a["regra"] for a in do_joao] == ["leitura_incerta"]
+    assert do_joao[0]["gravidade"] == "risco"
+    assert any(p["achado_id"] == do_joao[0]["id"] and "linha 2 da planilha" in p["acao"] for p in r["pendencias"])
+    assert not any(a["gravidade"] == "irregular" and a["funcionario_id"] == "301" for a in r["achados"])

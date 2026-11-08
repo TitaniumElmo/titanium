@@ -235,9 +235,16 @@ def extrair_linhas(cabecalho: list[str], linhas: list[list[str]], origem: str,
             qtd = int(valor("qtd")) if valor("qtd") else None
         except ValueError:
             qtd = None
+        fid, nome = valor("funcionario_id"), valor("nome")
+        if not data and not valor("epi") and re.search(r"[,;\t|]", fid):
+            # Linha colada sem dividir em colunas ("301,João Silva,servente,..." tudo na coluna A): recupera só
+            # a matrícula e o nome. O agente vê a linha sem data e sem EPI e manda revisar, sem acusar nada.
+            partes = [p.strip() for p in re.split(r"[,;\t|]", fid)]
+            fid, nome = partes[0], nome or (partes[1] if len(partes) > 1 else "")
+            conf["linha"] = 0.0
         saida.append({
-            "funcionario_id": valor("funcionario_id") or str(padrao.get("funcionario_id", "?")),
-            "nome": valor("nome") or padrao.get("nome", ""),
+            "funcionario_id": fid or str(padrao.get("funcionario_id", "?")),
+            "nome": nome or padrao.get("nome", ""),
             "funcao": (valor("funcao") or padrao.get("funcao", "")).lower(),
             "linha": n, "data": data, "epi": valor("epi"), "qtd": qtd if qtd is not None else 1, "ca": ca,
             "motivo": valor("motivo") or None, "assinatura": assinatura,
