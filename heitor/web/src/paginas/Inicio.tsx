@@ -54,13 +54,15 @@ function comoResolver(p: Pendencia): string {
 
 type TomSituacao = "alerta" | "atencao" | "ok";
 
-const TONS: Record<TomSituacao, { selo: string; traco: string }> = {
-  alerta: { selo: "bg-irregular-fundo text-irregular", traco: "text-irregular-borda" },
-  atencao: { selo: "bg-risco-fundo text-risco", traco: "text-risco-borda" },
-  ok: { selo: "bg-ok-fundo text-ok", traco: "text-ok-borda" },
+const TONS: Record<TomSituacao, { selo: string; traco: string; texto: string; brilho: string }> = {
+  alerta: { selo: "bg-irregular-fundo text-irregular", traco: "text-irregular-borda", texto: "text-irregular", brilho: "hover:border-irregular-borda/50" },
+  atencao: { selo: "bg-risco-fundo text-risco", traco: "text-risco-borda", texto: "text-risco", brilho: "hover:border-risco-borda/50" },
+  ok: { selo: "bg-ok-fundo text-ok", traco: "text-ok-borda", texto: "text-ok", brilho: "hover:border-ok-borda/50" },
 };
 
 const OSCILACAO = [0, 0.6, -0.4, 0.5, -0.3, 0.2, 0];
+const LARGURA_GRAFICO = 100;
+const ALTURA_GRAFICO = 32;
 
 function tendencia(valor: number, inicio: number): number[] {
   return OSCILACAO.map((o, i, todos) => {
@@ -70,16 +72,14 @@ function tendencia(valor: number, inicio: number): number[] {
   });
 }
 
-function MiniGrafico({ serie, className }: { serie: number[]; className?: string }) {
+function MiniGrafico({ serie, descricao, className }: { serie: number[]; descricao: string; className?: string }) {
   const id = useId();
-  const largura = 100;
-  const altura = 32;
   const menor = Math.min(...serie);
   const maior = Math.max(...serie);
   const faixa = maior - menor || 1;
   const pontos = serie.map((v, i) => {
-    const x = (i / (serie.length - 1)) * largura;
-    const y = maior === menor ? altura / 2 : 3 + (1 - (v - menor) / faixa) * (altura - 6);
+    const x = (i / (serie.length - 1)) * LARGURA_GRAFICO;
+    const y = maior === menor ? ALTURA_GRAFICO / 2 : 4 + (1 - (v - menor) / faixa) * (ALTURA_GRAFICO - 8);
     return [x, y] as const;
   });
   const linha = pontos.reduce((d, [x, y], i, todos) => {
@@ -88,22 +88,35 @@ function MiniGrafico({ serie, className }: { serie: number[]; className?: string
     const meio = (px + x) / 2;
     return `${d} C${meio} ${py} ${meio} ${y} ${x} ${y}`;
   }, "");
+  const ultimo = pontos[pontos.length - 1] ?? [LARGURA_GRAFICO, ALTURA_GRAFICO / 2];
   return (
-    <svg
-      aria-hidden
-      viewBox={`0 0 ${largura} ${altura}`}
-      preserveAspectRatio="none"
-      className={cn("pointer-events-none absolute inset-x-0 bottom-0 h-12 w-full sm:h-14", className)}
-    >
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.32" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={`${linha} L${largura} ${altura} L0 ${altura} Z`} fill={`url(#${id})`} />
-      <path d={linha} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
-    </svg>
+    <div role="img" aria-label={descricao} className={cn("pointer-events-none absolute inset-x-0 bottom-0 h-14 sm:h-16", className)}>
+      <svg viewBox={`0 0 ${LARGURA_GRAFICO} ${ALTURA_GRAFICO}`} preserveAspectRatio="none" className="size-full">
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[10, 21].map((y) => (
+          <line key={y} x1="0" x2={LARGURA_GRAFICO} y1={y} y2={y} stroke="var(--borda)" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
+        ))}
+        <path d={`${linha} L${LARGURA_GRAFICO} ${ALTURA_GRAFICO} L0 ${ALTURA_GRAFICO} Z`} fill={`url(#${id})`} />
+        <path
+          d={linha}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+          className="animar-traco"
+        />
+      </svg>
+      <span
+        className="absolute size-2 -translate-x-full -translate-y-1/2 rounded-full bg-current ring-4 ring-superficie"
+        style={{ left: "100%", top: `${(ultimo[1] / ALTURA_GRAFICO) * 100}%`, marginLeft: -4 }}
+      />
+    </div>
   );
 }
 
@@ -111,34 +124,42 @@ function Situacao({ semProtecao, aguardandoRh, emDia, total }: { semProtecao: nu
   const itens: {
     valor: string | number;
     rotulo: string;
+    status: string;
     para: string;
     tom: TomSituacao;
     icone: typeof IconeAlerta;
     serie: number[];
+    resumo: string;
   }[] = [
     {
       valor: semProtecao,
       rotulo: semProtecao === 1 ? "trabalhador sem proteção hoje" : "trabalhadores sem proteção hoje",
+      status: semProtecao > 0 ? "Urgente" : "Tudo certo",
       para: "/pendencias",
       tom: semProtecao > 0 ? "alerta" : "ok",
       icone: IconeAlerta,
       serie: tendencia(semProtecao, semProtecao + 3),
+      resumo: `${semProtecao + 3} para ${semProtecao}`,
     },
     {
       valor: aguardandoRh,
       rotulo: aguardandoRh === 1 ? "documento aguardando o RH" : "documentos aguardando o RH",
+      status: aguardandoRh > 0 ? "Aguardando" : "Tudo certo",
       para: "/pendencias",
       tom: aguardandoRh > 0 ? "atencao" : "ok",
       icone: IconeDocumento,
       serie: tendencia(aguardandoRh, aguardandoRh + 2),
+      resumo: `${aguardandoRh + 2} para ${aguardandoRh}`,
     },
     {
       valor: `${emDia} de ${total}`,
       rotulo: "fichas em dia",
+      status: emDia === total ? "Em dia" : "Atenção",
       para: "/funcionarios",
       tom: emDia === total ? "ok" : "atencao",
       icone: IconeLista,
       serie: tendencia(emDia, Math.max(0, emDia - 3)),
+      resumo: `${Math.max(0, emDia - 3)} para ${emDia}`,
     },
   ];
   return (
@@ -150,14 +171,18 @@ function Situacao({ semProtecao, aguardandoRh, emDia, total }: { semProtecao: nu
           <Link
             key={i.rotulo}
             to={i.para}
-            className="relative flex min-h-44 flex-col justify-between gap-3 overflow-hidden rounded-cartao border border-borda bg-superficie p-3 pb-14 transition-colors hover:border-fraco sm:min-h-52 sm:p-5 sm:pb-16"
+            className={cn(
+              "group relative flex min-h-48 flex-col gap-3 overflow-hidden rounded-cartao border border-borda bg-superficie p-3 pb-16 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento sm:min-h-56 sm:gap-4 sm:p-5 sm:pb-20",
+              tom.brilho,
+            )}
           >
-            <span className={cn("relative z-10 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 sm:gap-2 sm:px-3 sm:py-1.5", tom.selo)}>
-              <Icone className="size-4 shrink-0" aria-hidden />
-              <span className="whitespace-nowrap text-lg font-semibold tabular-nums sm:text-h2">{i.valor}</span>
+            <span className={cn("relative z-10 hidden text-xs font-medium sm:block", tom.texto)}>{i.status}</span>
+            <span className={cn("relative z-10 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 sm:gap-2.5 sm:px-4 sm:py-2", tom.selo)}>
+              <Icone className="size-4 shrink-0 sm:size-5" aria-hidden />
+              <span className="whitespace-nowrap text-lg font-semibold tabular-nums sm:text-3xl sm:leading-none">{i.valor}</span>
             </span>
             <span className="relative z-10 text-xs leading-snug text-apoio sm:text-sm">{i.rotulo}</span>
-            <MiniGrafico serie={i.serie} className={tom.traco} />
+            <MiniGrafico serie={i.serie} descricao={`${i.rotulo}: tendência ilustrativa dos últimos 7 dias, de ${i.resumo}`} className={tom.traco} />
           </Link>
         );
       })}

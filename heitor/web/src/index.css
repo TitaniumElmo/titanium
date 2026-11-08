@@ -311,6 +311,19 @@ body {
   animation: entrar 400ms ease-out both;
 }
 
+.animar-traco {
+  animation: traco 700ms ease-out both;
+}
+
+@keyframes traco {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .animar-contorno {
   animation: contorno 1.2s ease-in-out infinite;
 }
