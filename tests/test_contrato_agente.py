@@ -268,3 +268,20 @@ def test_linha_colada_na_coluna_a_vira_revisao_e_nao_acusacao():
     assert do_joao[0]["gravidade"] == "risco"
     assert any(p["achado_id"] == do_joao[0]["id"] and "linha 2 da planilha" in p["acao"] for p in r["pendencias"])
     assert not any(a["gravidade"] == "irregular" and a["funcionario_id"] == "301" for a in r["achados"])
+
+
+def test_tabela_de_colunas_para_a_tela_de_fontes():
+    """Pedido da Luciana: coluna da planilha, campo entendido e confiança, na ordem da planilha."""
+    from heitor.agente.extracao import mapear_colunas
+
+    cab = ["Matrícula", "Colaborador", "Cargo", "Dt entrega", "Item", "Certificado", "Obs", "Ass.", "Qtd."]
+    amostra = [["0520", "João Pereira", "pedreiro", "15/09/2026", "protetor auditivo", "CA 17664", "novo", "x", "1"]]
+    colunas = mapear_colunas(cab, amostra)["colunas"]
+    assert [c["coluna"] for c in colunas] == cab
+    por_nome = {c["coluna"]: c for c in colunas}
+    assert por_nome["Certificado"]["campo"] == "ca" and por_nome["Certificado"]["campo_rotulo"] == "Nº do CA"
+    assert por_nome["Certificado"]["exemplo"] == "CA 17664"
+    assert por_nome["Obs"]["situacao"] == "ignorada" and por_nome["Obs"]["campo"] is None
+    assert por_nome["Ass."]["campo"] == "assinatura"  # abreviação com ponto
+    assert por_nome["Qtd."]["campo"] == "qtd"
+    assert all(c["situacao"] in ("entendida", "conferir", "ignorada") for c in colunas)
