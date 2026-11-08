@@ -47,7 +47,7 @@ def test_reaberta_tambem_leva_a_acao_da_regra(client, enviados):
     ferramentas.marcar_aguardando(p["id"])
     ferramentas.fechar_pendencia(p["id"], False)
     reaberta = enviados[-1]
-    assert reaberta["assunto"].startswith("Pendência reaberta pelo Heitor")
+    assert reaberta["assunto"].startswith("Pendência reaberta pelo Elmo")
     assert "pedir nota fiscal ao RH" in reaberta["texto"] and "golpe" not in reaberta["texto"]
 
 

@@ -12,7 +12,7 @@ poderia fazê-lo escrever qualquer coisa (um link, por exemplo) num e-mail
 enviado em nome do Heitor. O texto do LLM continua na pendência e na tela.
 
 Nome do produto nos e-mails (remetente à parte, que vem de SMTP_FROM):
-    HEITOR_NOME_NO_EMAIL=Elmo   (padrão: Heitor). Só o texto do e-mail muda.
+    HEITOR_NOME_NO_EMAIL=Elmo   (padrão: Elmo). Só o texto do e-mail muda.
 
 Teste de envio (manda um e-mail para o técnico e para o RH configurados):
     python -m heitor.api.notificacao --teste
@@ -40,7 +40,7 @@ _PARA_QUEM = {"tecnico": "técnico de segurança", "rh": "RH"}
 
 def nome() -> str:
     """Nome do produto no texto dos e-mails."""
-    return os.getenv("HEITOR_NOME_NO_EMAIL") or "Heitor"
+    return os.getenv("HEITOR_NOME_NO_EMAIL") or "Elmo"
 
 
 def _texto(p: Pendencia, assunto: str, acao: str) -> str:

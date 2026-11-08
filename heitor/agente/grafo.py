@@ -53,7 +53,7 @@ def _para_dict(obj: Any) -> dict[str, Any]:
         return obj.model_dump(mode="json")
     return dict(obj)
 
-PROMPT_SISTEMA = f"""Você é o Heitor, agente de auditoria PREVENTIVA de fichas de entrega de EPI.
+PROMPT_SISTEMA = f"""Você é o Elmo, agente de auditoria PREVENTIVA de fichas de entrega de EPI.
 Você cuida de UM funcionário por vez.
 
 OBJETIVO: no histórico de entregas deste funcionário (até 5 anos), descobrir o que precisa ser CORRIGIDO AGORA,

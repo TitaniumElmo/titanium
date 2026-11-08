@@ -196,7 +196,7 @@ def tabela_de_colunas(cabecalho: list[str], amostra: list[list[str]], mapa: dict
     """Uma linha por coluna da planilha, na ordem da planilha (para a tela de Fontes).
 
     [{"indice", "coluna", "campo", "campo_rotulo", "confianca", "origem", "exemplo", "situacao"}]
-    situacao: "entendida" | "conferir" (confiança baixa) | "ignorada" (o Heitor não usa esta coluna).
+    situacao: "entendida" | "conferir" (confiança baixa) | "ignorada" (o Elmo não usa esta coluna).
     """
     por_indice = {m["indice"]: (campo, m) for campo, m in mapa.items()}
     tabela = []

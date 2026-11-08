@@ -13,7 +13,7 @@ from typing import Any
 from heitor.agente.tipos import AchadoDict as Achado
 from heitor.dados.dias_sem_epi import dias_sem_epi_valido, texto as dias_texto
 
-AVISO = ("O Heitor aponta lacunas na prova documental das fichas de EPI. Ele não afirma se há "
+AVISO = ("O Elmo aponta lacunas na prova documental das fichas de EPI. Ele não afirma se há "
          "insalubridade: quem a caracteriza é a perícia (art. 195 da CLT).")
 
 SUMULA_80 = "Súmula 80 do TST: EPI aprovado (com CA) e eficaz exclui o adicional."
