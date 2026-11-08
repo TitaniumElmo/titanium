@@ -61,13 +61,22 @@ _TEXTOS: dict[str, dict[str, Any]] = {
     },
     "epi_inadequado": {
         "titulo": "EPI exigido pela função não aparece na ficha",
-        "explicacao": "A função exige este EPI pelo agente nocivo, mas a ficha não registra nenhuma "
-                      "entrega. O período sem registro é exposição potencial.",
+        "explicacao": "A função exige este EPI pela tabela de riscos da empresa, mas a ficha não registra nenhuma "
+                      "entrega: o trabalhador pode estar sem essa proteção. Só quando o risco é insalubre (ruído) "
+                      "o período sem registro entra na exposição em R$; nos demais, o risco é de acidente.",
         "base": [SUMULA_80, SUMULA_289, "Art. 166 da CLT: a empresa deve fornecer EPI gratuitamente."],
     },
     "troca_atrasada": {
-        "titulo": "Troca fora da vida útil",
-        "explicacao": "O intervalo entre as trocas passou da durabilidade indicada pelo fabricante.",
+        "titulo": "EPI vencido em uso agora",
+        "explicacao": "Desde a última entrega, o EPI passou da durabilidade indicada pelo fabricante: o trabalhador "
+                      "pode estar sem proteção adequada hoje. A troca corrige.",
+        "base": [SUMULA_289],
+    },
+    "troca_passado": {
+        "titulo": "EPI usado além da vida útil (período já encerrado)",
+        "explicacao": "Entre duas entregas, o EPI ficou em uso além da durabilidade indicada pelo fabricante. "
+                      "A troca já foi feita, então não há o que corrigir agora: o período sem proteção adequada "
+                      "fica como passivo e entra na exposição.",
         "base": [SUMULA_289],
     },
     "treinamento_ausente": {
