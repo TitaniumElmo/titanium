@@ -4,8 +4,28 @@ import { type Coluna, type Filtros, ROTULO_EVENTO, type TipoEvento } from "../hi
 import type { Gatilho } from "../tipos";
 import { cn } from "../util";
 
-const FUNDO_PRETO = "border-borda bg-superficie bg-[radial-gradient(120%_90%_at_100%_0%,var(--cartao-brilho),transparent_60%)]";
-const FUNDO_URGENTE = "border-borda bg-gradient-to-b from-cartao-urgente-topo via-cartao-urgente-meio to-cartao-urgente-base";
+const FUNDO_PRETO = "bg-superficie bg-[radial-gradient(120%_90%_at_100%_0%,var(--cartao-brilho),transparent_60%)]";
+const FUNDO_URGENTE = "bg-gradient-to-b from-cartao-urgente-topo via-cartao-urgente-meio to-cartao-urgente-base";
+
+function ConteudoCartao({ rotulo, valor, detalhe, urgente, icone }: { rotulo: string; valor: string | number; detalhe: string; urgente: boolean; icone: ReactNode }) {
+  return (
+    <>
+      <span className={cn("text-xs font-semibold uppercase tracking-sobrescrito sm:text-sm", urgente ? "text-irregular" : "text-apoio")}>{rotulo}</span>
+      <span
+        className={cn(
+          "inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 sm:gap-2.5 sm:px-4 sm:py-2",
+          urgente ? "bg-selo-claro text-selo-claro-texto" : "bg-superficie-2 text-texto",
+        )}
+      >
+        <span className="size-4 shrink-0 sm:size-5" aria-hidden>
+          {icone}
+        </span>
+        <span className="whitespace-nowrap text-2xl font-semibold tabular-nums sm:text-3xl sm:leading-none">{valor}</span>
+      </span>
+      <span className="text-sm leading-snug text-apoio sm:text-base">{detalhe}</span>
+    </>
+  );
+}
 
 export function CartaoNumero({
   rotulo,
@@ -21,21 +41,43 @@ export function CartaoNumero({
   icone: ReactNode;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-2 rounded-cartao border p-4 sm:gap-3 sm:p-5", urgente ? FUNDO_URGENTE : FUNDO_PRETO)}>
-      <span className={cn("text-xs font-semibold uppercase tracking-sobrescrito sm:text-sm", urgente ? "text-irregular" : "text-apoio")}>{rotulo}</span>
-      <span
-        className={cn(
-          "inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 sm:gap-2.5 sm:px-4 sm:py-2",
-          urgente ? "bg-selo-claro text-selo-claro-texto" : "bg-superficie-2 text-texto",
-        )}
-      >
-        <span className="size-4 shrink-0 sm:size-5" aria-hidden>
-          {icone}
-        </span>
-        <span className="whitespace-nowrap text-2xl font-semibold tabular-nums sm:text-3xl sm:leading-none">{valor}</span>
-      </span>
-      <span className="text-sm leading-snug text-apoio sm:text-base">{detalhe}</span>
+    <div className={cn("flex min-w-0 flex-col gap-2 rounded-cartao border border-borda p-4 sm:gap-3 sm:p-5", urgente ? FUNDO_URGENTE : FUNDO_PRETO)}>
+      <ConteudoCartao rotulo={rotulo} valor={valor} detalhe={detalhe} urgente={urgente} icone={icone} />
     </div>
+  );
+}
+
+export function CartaoAba({
+  rotulo,
+  valor,
+  detalhe,
+  urgente = false,
+  selecionado,
+  aoClicar,
+  icone,
+}: {
+  rotulo: string;
+  valor: string | number;
+  detalhe: string;
+  urgente?: boolean;
+  selecionado: boolean;
+  aoClicar: () => void;
+  icone: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selecionado}
+      onClick={aoClicar}
+      className={cn(
+        "flex min-w-0 cursor-pointer flex-col gap-2 rounded-cartao border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento sm:gap-3 sm:p-5",
+        urgente ? FUNDO_URGENTE : FUNDO_PRETO,
+        selecionado ? "border-acento" : "border-borda hover:border-fraco",
+      )}
+    >
+      <ConteudoCartao rotulo={rotulo} valor={valor} detalhe={detalhe} urgente={urgente} icone={icone} />
+    </button>
   );
 }
 
@@ -43,7 +85,7 @@ export function GraficoAtividade({ colunas }: { colunas: Coluna[] }) {
   const maior = Math.max(1, ...colunas.flatMap((c) => [c.abertas, c.fechadas]));
   const resumo = `Pendências abertas e fechadas por período: ${colunas.map((c) => `${c.rotulo}, ${c.abertas} abertas e ${c.fechadas} fechadas`).join("; ")}`;
   return (
-    <section className={cn("flex flex-col gap-3 rounded-cartao border p-4 sm:p-5", FUNDO_PRETO)} aria-label="Pendências abertas e fechadas">
+    <section className={cn("flex flex-col gap-3 rounded-cartao border border-borda p-4 sm:p-5", FUNDO_PRETO)} aria-label="Pendências abertas e fechadas">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-label">Abertas × fechadas</h2>
         <span className="flex items-center gap-4 text-sm text-apoio">

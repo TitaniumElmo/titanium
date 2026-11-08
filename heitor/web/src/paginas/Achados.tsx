@@ -2,10 +2,10 @@ import { useMemo, useState } from "react";
 import { useMundo } from "../api";
 import { EstadoVazio, Segmentos } from "../componentes/base";
 import { CartaoAchado } from "../componentes/CartaoAchado";
+import { CartaoAba } from "../componentes/ResumoHistorico";
 import { Pagina } from "../componentes/Pagina";
-import { ROTULO_TIPO } from "../formato";
 import type { Gravidade, TipoAchado } from "../tipos";
-import { IconeAlerta } from "../util";
+import { IconeAlerta, IconeCalendario, IconeDocumento, IconeLista } from "../util";
 
 type FiltroGravidade = "todas" | Exclude<Gravidade, "ok">;
 type FiltroTipo = "todos" | TipoAchado;
@@ -22,18 +22,51 @@ export function Achados() {
     return [...vistos.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [mundo.achados]);
 
-  const lista = mundo.achados.filter(
-    (a) =>
-      a.gravidade !== "ok" &&
-      (gravidade === "todas" || a.gravidade === gravidade) &&
-      (tipo === "todos" || a.tipo === tipo) &&
-      (funcionario === "todos" || a.funcionario_id === funcionario),
+  const base = mundo.achados.filter(
+    (a) => a.gravidade !== "ok" && (gravidade === "todas" || a.gravidade === gravidade) && (funcionario === "todos" || a.funcionario_id === funcionario),
   );
+  const lista = base.filter((a) => tipo === "todos" || a.tipo === tipo);
+  const total = (t: TipoAchado) => base.filter((a) => a.tipo === t).length;
 
   const conta = (g: Gravidade) => mundo.achados.filter((a) => a.gravidade === g).length;
 
   return (
-    <Pagina titulo="Achados" descricao="Lacunas na prova documental, cada uma com a evidência na ficha." comPeriodo>
+    <Pagina titulo="Achados" descricao="Lacunas na prova documental, cada uma com a evidência na ficha e o destino que o Elmo deu a ela." comPeriodo>
+      <section role="radiogroup" aria-label="Tipo de achado" className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+        <CartaoAba
+          rotulo="Todos"
+          valor={base.length}
+          detalhe="falhas encontradas na prova"
+          selecionado={tipo === "todos"}
+          aoClicar={() => setTipo("todos")}
+          icone={<IconeLista className="size-full" />}
+        />
+        <CartaoAba
+          rotulo="Corrigível"
+          valor={total("corrigivel")}
+          detalhe="viram pendência para o técnico"
+          urgente={total("corrigivel") > 0}
+          selecionado={tipo === "corrigivel"}
+          aoClicar={() => setTipo(tipo === "corrigivel" ? "todos" : "corrigivel")}
+          icone={<IconeAlerta className="size-full" />}
+        />
+        <CartaoAba
+          rotulo="Prova"
+          valor={total("prova")}
+          detalhe="viram pedido de documento ao RH"
+          selecionado={tipo === "prova"}
+          aoClicar={() => setTipo(tipo === "prova" ? "todos" : "prova")}
+          icone={<IconeDocumento className="size-full" />}
+        />
+        <CartaoAba
+          rotulo="Passivo"
+          valor={total("passivo")}
+          detalhe="sem tarefa: entram no relatório"
+          selecionado={tipo === "passivo"}
+          aoClicar={() => setTipo(tipo === "passivo" ? "todos" : "passivo")}
+          icone={<IconeCalendario className="size-full" />}
+        />
+      </section>
       <div className="flex flex-wrap items-center gap-2">
         <Segmentos
           rotulo="Gravidade"
@@ -43,17 +76,6 @@ export function Achados() {
             { valor: "todas", rotulo: "Todas" },
             { valor: "irregular", rotulo: `Irregular · ${conta("irregular")}` },
             { valor: "risco", rotulo: `Risco · ${conta("risco")}` },
-          ]}
-        />
-        <Segmentos
-          rotulo="Tipo"
-          valor={tipo}
-          aoMudar={setTipo}
-          opcoes={[
-            { valor: "todos", rotulo: "Todos os tipos" },
-            { valor: "corrigivel", rotulo: ROTULO_TIPO.corrigivel },
-            { valor: "prova", rotulo: "Prova" },
-            { valor: "passivo", rotulo: ROTULO_TIPO.passivo },
           ]}
         />
         <label className="relative inline-flex">
