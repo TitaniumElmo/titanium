@@ -534,6 +534,31 @@ export async function rodarExemplo() {
   if (await enviar("/auditorias", corpo)) void consultar();
 }
 
+/** O técnico (ou o RH) responde a pendência pela tela: a API reaudita com as mesmas regras e devolve o status novo
+ * (fechada, reaberta, ou aguardando quando é documento). Sem isso, só dava para corrigir editando a planilha do Drive. */
+export async function responderPendencia(
+  id: string,
+  arquivo: Blob,
+  nomeArquivo: string,
+  nota?: string,
+): Promise<{ ok: boolean; status?: string; detalhe?: string }> {
+  const corpo = new FormData();
+  corpo.append("arquivo", arquivo, nomeArquivo);
+  if (nota) corpo.append("nota", nota);
+  try {
+    const r = await fetch(`${BASE}/pendencias/${encodeURIComponent(id)}/resposta`, { method: "POST", body: corpo });
+    const json = (await r.json().catch(() => null)) as
+      | { status?: string; detail?: string; historico?: { nota?: string | null }[] }
+      | null;
+    void consultar();
+    if (!r.ok) return { ok: false, detalhe: json?.detail ?? `erro ${r.status}` };
+    const ultima = json?.historico?.[json.historico.length - 1]?.nota ?? undefined;
+    return { ok: true, status: json?.status, detalhe: ultima ?? undefined };
+  } catch {
+    return { ok: false, detalhe: "a API não respondeu" };
+  }
+}
+
 export function desconectarFonte() {
   /* a fonte vem do servidor (.env); a tela não desconecta */
 }

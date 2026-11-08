@@ -18,6 +18,7 @@ export const SUPORTA = {
   desconectarFonte: MODO === "mock",
   rodarExemplo: MODO === "api",
   trocarPasta: MODO === "api", // POST /fontes: uma pasta por vez, com a senha do time
+  responderPendencia: MODO === "api", // POST /pendencias/{id}/resposta: corrigir pela tela
 };
 
 export function useMundo(): Mundo {
@@ -52,6 +53,7 @@ export const acoes = {
   rodarExemplo: servidor.rodarExemplo,
   trocarPasta: servidor.trocarPasta,
   voltarPastaPadrao: servidor.voltarPastaPadrao,
+  responderPendencia: servidor.responderPendencia,
 };
 
 export const detalhesDaFonte = servidor.detalhesDaFonte;

@@ -218,7 +218,7 @@ def criar_pendencia(achado: Achado, destino: str, acao: str, prazo: str) -> Pend
     return p
 
 
-def fechar_pendencia(pendencia: Pendencia, resultado: str) -> Pendencia:
+def fechar_pendencia(pendencia: Pendencia, resultado: str, nota: str | None = None) -> Pendencia:
     p = _PENDENCIAS.get(pendencia["id"], pendencia)
     p["status"] = "fechada" if resultado == "confirmada" else "reaberta"
     p.setdefault("historico", []).append({"status": p["status"], "ts": _agora(), "nota": resultado})
