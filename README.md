@@ -1,12 +1,12 @@
-# Heitor
+# Elmo
 
-**O Heitor encontra os furos nas fichas de EPI de uma construtora e cobra a correção antes do fiscal, do advogado ou do acidente.**
+**O Elmo encontra os furos nas fichas de EPI de uma construtora e cobra a correção antes do fiscal, do advogado ou do acidente.**
 
 Um agente de IA audita, de forma preventiva, as fichas de entrega de EPI (equipamento de proteção individual). Ele cruza cada entrega com a base oficial de CAs do Ministério do Trabalho e com o que a função exige, cria tarefas com prazo para o técnico de segurança, pede documentos ao RH, percebe sozinho quando a planilha é corrigida e fecha a tarefa. O passivo que não tem conserto vira um valor em R$.
 
-Feito no Converge Challenge (Porto Digital, Recife, 7 e 8/11/2026).
+Feito no Converge Challenge (Porto Digital, Recife, 7 e 8/11/2026). No código, o projeto ainda se chama `heitor` (pacote `heitor/`, variáveis `HEITOR_*`).
 
-> O Heitor aponta lacunas na **prova documental**. Ele não afirma se há insalubridade: quem a caracteriza é a perícia (art. 195 da CLT).
+> O Elmo aponta lacunas na **prova documental**. Ele não afirma se há insalubridade: quem a caracteriza é a perícia (art. 195 da CLT).
 
 ## Por que existe
 
@@ -25,7 +25,7 @@ Gatilho (vigia do Drive, upload, prazo vencido; código, sem LLM)
 
 **O LLM decide o caminho; as regras decidem a verdade.** O LLM escolhe o que investigar, se vale conferir a ficha de papel, a urgência de cada correção e o texto da ação. Só as regras determinísticas dizem o que é falha. Com ou sem LLM, a auditoria acha as mesmas falhas.
 
-O que o Heitor nunca faz, garantido por código e testes: sugerir assinar, preencher ou alterar ficha antiga (fraude documental); mandar retirar um EPI; trocar um CA ou uma data lida; alterar a ficha ou a pasta; travar quando o LLM cai.
+O que o Elmo nunca faz, garantido por código e testes: sugerir assinar, preencher ou alterar ficha antiga (fraude documental); mandar retirar um EPI; trocar um CA ou uma data lida; alterar a ficha ou a pasta; travar quando o LLM cai.
 
 ## Rodar localmente
 
