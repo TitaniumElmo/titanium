@@ -51,7 +51,7 @@ async def ciclo_de_vida(app: FastAPI):
         relogio.set()
 
 
-app = FastAPI(title="Heitor", description="Auditoria de fichas de EPI", version="0.1.0", lifespan=ciclo_de_vida)
+app = FastAPI(title="Elmo", description="Auditoria de fichas de EPI", version="0.1.0", lifespan=ciclo_de_vida)
 
 app.add_middleware(
     CORSMiddleware,

@@ -266,8 +266,8 @@ def reauditar(pendencia_id: str, linhas: list[Linha], emitir_evento: Optional[Ca
 def gerar_relatorio(achados: list[dict], exposicao: Optional[dict] = None) -> dict[str, Any]:
     """Mesmo formato do relatório da Sofia, simplificado: {"texto": markdown}."""
     if not achados:
-        return {"texto": "# Relatório do Heitor\n\nNenhuma lacuna encontrada na prova documental.\n"}
-    partes = ["# Relatório do Heitor (stub)\n"]
+        return {"texto": "# Relatório do Elmo\n\nNenhuma lacuna encontrada na prova documental.\n"}
+    partes = ["# Relatório do Elmo (stub)\n"]
     for a in achados:
         partes.append(
             f"- **{a['regra']}** ({a['gravidade']}, {a['tipo']}), funcionário {a['funcionario_id']}: "

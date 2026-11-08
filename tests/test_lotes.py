@@ -30,11 +30,11 @@ def test_lote_manda_um_email_por_destinatario(client, enviados):  # noqa: F811
     por_destino = {e["para"]: e for e in enviados}
     assert len(enviados) == 2 and set(por_destino) == {"rh@teste", "tecnico@teste"}
     rh = por_destino["rh@teste"]
-    assert rh["assunto"] == "Heitor: 3 pendências novas"
+    assert rh["assunto"] == "Elmo: 3 pendências novas"
     assert [l for l in rh["texto"].splitlines() if "O que fazer" in l] == [
         "   O que fazer: ação da regra 0", "   O que fazer: ação da regra 1", "   O que fazer: ação da regra 2"]
     assert "texto do LLM" not in rh["texto"]
-    assert por_destino["tecnico@teste"]["assunto"].startswith("Nova pendência do Heitor: ação da regra 9")
+    assert por_destino["tecnico@teste"]["assunto"].startswith("Nova pendência do Elmo: ação da regra 9")
 
 
 def test_lote_junta_pendencias_criadas_em_varias_threads(client, enviados):  # noqa: F811
@@ -47,7 +47,7 @@ def test_lote_junta_pendencias_criadas_em_varias_threads(client, enviados):  # n
             t.start()
         for t in ts:
             t.join()
-    assert len(enviados) == 1 and enviados[0]["assunto"] == "Heitor: 6 pendências novas"
+    assert len(enviados) == 1 and enviados[0]["assunto"] == "Elmo: 6 pendências novas"
 
 
 def test_auditoria_pela_api_manda_um_email_por_destinatario(client, enviados):  # noqa: F811
@@ -65,7 +65,7 @@ def test_cobranca_agrupada(client, enviados):  # noqa: F811
     enviados.clear()
     feitas = cobranca.cobrar_atrasadas(date(2026, 11, 20))
     assert len(feitas) == 3
-    assert len(enviados) == 1 and enviados[0]["assunto"] == "Heitor: 3 pendências em atraso"
+    assert len(enviados) == 1 and enviados[0]["assunto"] == "Elmo: 3 pendências em atraso"
 
 
 def test_edicao_detectada_assim_que_a_versao_muda(client, tmp_path):
