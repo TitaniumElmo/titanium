@@ -7,6 +7,8 @@ export type Prioridade = "normal" | "alta";
 
 export type Gatilho =
   | "alteracao_planilha"
+  | "upload"
+  | "manual"
   | "prazo_vencido"
   | "vencimento_futuro"
   | "nova_base_caepi"
@@ -39,7 +41,8 @@ export type Ferramenta =
   | "gerar_relatorio"
   | "auditar_ficha"
   | "conferir_ficha_de_papel"
-  | "historico_da_empresa";
+  | "historico_da_empresa"
+  | "edicao_detectada";
 
 export type TipoEvento = "ferramenta" | "decisao" | "erro";
 export type ErroAgente = "modelo_indisponivel" | "resposta_invalida" | "pendencia_recusada";
@@ -90,14 +93,14 @@ export type Pendencia = {
   id: string;
   achado_id: string;
   funcionario_id: string;
-  nome: string;
+  funcionario_nome: string;
   destino: Destino;
   acao: string;
   motivo: string;
   prazo: string;
   status: StatusPendencia;
   historico: EntradaHistorico[];
-  gatilho: Gatilho;
+  disparado_por: Gatilho;
   cobrancas: number;
   escalada: boolean;
   prioridade: Prioridade;
@@ -131,7 +134,7 @@ export type Fonte = {
   proxima_leitura: string;
 };
 
-export type StatusAuditoria = "rodando" | "concluida" | "erro";
+export type StatusAuditoria = "processando" | "concluida" | "erro";
 
 export type Auditoria = {
   id: string;
@@ -140,9 +143,9 @@ export type Auditoria = {
   iniciada_em: string;
   contagem: { irregular: number; risco: number; ok: number };
   exposicao_total: number;
-  gatilho: Gatilho;
-  gatilho_detalhe: string;
-  fichas: number;
+  disparado_por: Gatilho;
+  descricao_disparo: string;
+  n_fichas: number;
   modo?: ModoAuditoria;
   modo_por_funcionario?: Record<string, "llm" | "degradado">;
 };
@@ -150,7 +153,7 @@ export type Auditoria = {
 export type ItemAtividade = {
   id: string;
   ts: string;
-  gatilho: Gatilho;
+  disparado_por: Gatilho;
   resumo: string;
   auditoria_id: string;
   pendencias_abertas: string[];

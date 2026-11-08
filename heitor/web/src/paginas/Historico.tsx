@@ -54,7 +54,7 @@ function ItemFeed({ item, novo }: { item: ItemAtividade; novo: boolean }) {
   const rotuloChip = (id: string) => {
     const p = mundo.pendencias.find((x) => x.id === id);
     if (!p) return "aberta";
-    if (item.gatilho === "prazo_vencido") return p.escalada ? "escalada" : "cobrada";
+    if (item.disparado_por === "prazo_vencido") return p.escalada ? "escalada" : "cobrada";
     return ROTULO_STATUS[p.status].toLowerCase();
   };
   const abrir = () => navegar(`/agente?execucao=${item.auditoria_id}`);
@@ -69,7 +69,7 @@ function ItemFeed({ item, novo }: { item: ItemAtividade; novo: boolean }) {
       <span className="pt-0.5 font-mono text-xs text-apoio">{hora(item.ts)}</span>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <SeloGatilho gatilho={item.gatilho} />
+          <SeloGatilho gatilho={item.disparado_por} />
           {novo && (
             <span className="flex items-center gap-1 text-xs font-medium text-acento">
               <span className="size-1.5 rounded-full bg-acento" />

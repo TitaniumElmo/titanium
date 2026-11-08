@@ -149,9 +149,9 @@ export function VisaoGeral() {
           {ultima ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <SeloGatilho gatilho={ultima.gatilho} comPrefixo />
+                <SeloGatilho gatilho={ultima.disparado_por} comPrefixo />
               </div>
-              <p className="text-sm text-apoio">{ultima.gatilho_detalhe}</p>
+              <p className="text-sm text-apoio">{ultima.descricao_disparo}</p>
               <dl className="grid grid-cols-3 gap-3">
                 <div className="rounded-controle bg-superficie-2 px-3 py-2">
                   <dt className="text-xs text-fraco">Hora</dt>

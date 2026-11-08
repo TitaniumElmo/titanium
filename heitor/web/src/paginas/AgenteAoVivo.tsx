@@ -41,7 +41,7 @@ export function AgenteAoVivo() {
   }
 
   const eventos = mundo.eventos[auditoria.id] ?? [];
-  const rodando = auditoria.status === "rodando";
+  const rodando = auditoria.status === "processando";
   const achados = mundo.achados.filter((a) => a.auditoria_id === auditoria.id);
   const nomes = Object.fromEntries(mundo.funcionarios.map((f) => [f.funcionario_id, f.nome]));
   const custo = eventos.reduce((soma, e) => soma + e.custo_usd, 0);
@@ -75,7 +75,7 @@ export function AgenteAoVivo() {
             <option value="atual">Execução mais recente</option>
             {mundo.auditorias.map((a) => (
               <option key={a.id} value={a.id}>
-                {dataCurta(a.iniciada_em)} {hora(a.iniciada_em)} · {ROTULO_GATILHO[a.gatilho]}
+                {dataCurta(a.iniciada_em)} {hora(a.iniciada_em)} · {ROTULO_GATILHO[a.disparado_por]}
               </option>
             ))}
           </select>
@@ -87,7 +87,7 @@ export function AgenteAoVivo() {
         chave={auditoria.id}
         eventos={eventos}
         rodando={rodando}
-        fichasNaPilha={rodando ? auditoria.fichas : mundo.funcionarios.length}
+        fichasNaPilha={rodando ? auditoria.n_fichas : mundo.funcionarios.length}
         urgente={mundo.pendencias.some((p) => ehUrgente(p, hoje))}
         progressoLeitura={mundo.fonte ? 1 - (segundos ?? 0) / mundo.fonte.intervalo_s : 0}
         deslocamento={mundo.deslocamento_ms}
@@ -96,8 +96,8 @@ export function AgenteAoVivo() {
       <Cartao className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <SeloGatilho gatilho={auditoria.gatilho} comPrefixo />
-            <span className="text-sm text-apoio">{auditoria.gatilho_detalhe}</span>
+            <SeloGatilho gatilho={auditoria.disparado_por} comPrefixo />
+            <span className="text-sm text-apoio">{auditoria.descricao_disparo}</span>
           </div>
           <span className="flex items-center gap-2 text-xs tabular-nums text-apoio">
             <span className={cn("size-2 rounded-full", rodando ? "animar-pulsar bg-acento" : "bg-ok-borda")} />

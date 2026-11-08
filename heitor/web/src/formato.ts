@@ -2,6 +2,8 @@ import type { Destino, Etapa, Gatilho, Gravidade, ModoAuditoria, StatusPendencia
 
 export const ROTULO_GATILHO: Record<Gatilho, string> = {
   alteracao_planilha: "alteração na planilha",
+  upload: "envio de planilha",
+  manual: "conferência pedida",
   prazo_vencido: "prazo vencido",
   vencimento_futuro: "vencimento próximo",
   nova_base_caepi: "CA cancelado na base",
@@ -15,6 +17,28 @@ export const ROTULO_MODO: Record<ModoAuditoria, string> = {
   misto: "misto (LLM e regras)",
   deterministico: "só regras",
 };
+
+export const ROTULO_REGRA: Record<string, string> = {
+  assinatura_ausente: "Entrega sem assinatura",
+  ca_ausente: "CA não informado",
+  ca_vencido: "CA vencido na entrega",
+  ca_nao_encontrado: "CA não encontrado na base",
+  ca_cancelado: "CA cancelado ou suspenso",
+  ca_conflitante: "CA com dados conflitantes",
+  epi_inadequado: "EPI exigido ausente",
+  troca_atrasada: "Troca atrasada",
+  troca_passado: "Período além da vida útil",
+  treinamento_ausente: "Sem registro de treinamento",
+  falha_de_ferramenta: "Precisa de revisão",
+  funcao_desconhecida: "Função fora da tabela",
+  entrega_sem_ficha: "Não está na ficha de papel",
+  ficha_sem_planilha: "Só na ficha de papel",
+  leitura_incerta: "Leitura da foto em dúvida",
+};
+
+export function rotuloRegra(regra: string): string {
+  return ROTULO_REGRA[regra] ?? regra.replace(/_/g, " ");
+}
 
 export const ROTULO_GRAVIDADE: Record<Gravidade, string> = {
   irregular: "Irregular",

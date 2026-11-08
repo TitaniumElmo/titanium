@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { reais } from "../formato";
+import { reais, rotuloRegra } from "../formato";
 import type { Achado, Pendencia } from "../tipos";
 import { cn } from "../util";
 import { SeloGravidade, SeloTipo } from "./Selos";
@@ -20,7 +20,9 @@ export function CartaoAchado({
       <div className="flex flex-wrap items-center gap-1.5">
         <SeloGravidade gravidade={achado.gravidade} />
         <SeloTipo tipo={achado.tipo} />
-        <span className="ml-auto font-mono text-xs text-fraco">{achado.regra}</span>
+        <span className="ml-auto text-xs font-medium text-apoio" title={achado.regra}>
+          {rotuloRegra(achado.regra)}
+        </span>
       </div>
       <h3 className="mt-3 text-sm font-medium">
         {achado.nome}
