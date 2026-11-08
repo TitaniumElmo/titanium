@@ -29,7 +29,9 @@ def exigir_admin(
 ) -> None:
     esperado = config.token_admin()
     if not esperado:
-        return  # sem token configurado: ambiente de desenvolvimento
+        if config.em_deploy():  # esquecer a variável no deploy não pode abrir a troca de pasta para todos
+            raise HTTPException(503, "rota de administração desligada: HEITOR_TOKEN_ADMIN não está configurado no servidor")
+        return  # sem token configurado na máquina de quem desenvolve: liberadas
     enviado = x_heitor_token
     if not enviado and authorization and authorization.lower().startswith("bearer "):
         enviado = authorization[7:].strip()
