@@ -1,0 +1,12 @@
+{
+  "arquivo": "aso_01.jpg",
+  "nome": "Pedro Lima",
+  "crm": "12345-PB",
+  "data_exame": "2026-01-15",
+  "tipo_exame": "periodico",
+  "resultado": "inapto",
+  "carimbo_medico": true,
+  "assinatura_medico": "presente",
+  "assinatura_trabalhador": "ausente",
+  "observacao": "trabalhador não assinou a ciência (caso difícil de propósito)"
+}
