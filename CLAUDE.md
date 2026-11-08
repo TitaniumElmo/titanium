@@ -53,6 +53,8 @@ Auditar fichas (CAEPI + tabela função → EPI)
 
 Se o documento pedido ao RH não existir, o achado vira pendência ou passivo.
 
+**Como a correção chega:** o técnico corrige na **planilha da pasta do Drive** e o vigia percebe sozinho (gatilho 1, seção 8): a auditoria nova fecha a pendência cujo problema sumiu. Também dá para responder pela API (`POST /pendencias/{id}/resposta`).
+
 ### Os três tipos de achado
 | Tipo | Exemplos | Ação |
 |---|---|---|
@@ -71,6 +73,7 @@ Se o documento pedido ao RH não existir, o achado vira pendência ou passivo.
 - **O que o LLM decide (é por isso que é agente, não workflow):** o que investigar (`consulta_ca`, `historico_da_empresa`, `buscar_ca_proximo`), **se vale conferir a ficha de papel**, a **urgência** de cada correção (prazo de 1–2 dias para quem está sem proteção hoje) e o **texto da ação para o técnico**. Ficha limpa termina em ~2 passos; ficha suspeita é investigada.
 - **Objetivo do prompt (preventivo):** no histórico do funcionário (até 5 anos), descobrir o que precisa ser corrigido agora e dizer ao técnico o que fazer, até quando e por quê. O passivo vai para o relatório, não vira tarefa.
 - Um episódio por funcionário; até 3 funcionários em paralelo (`HEITOR_PARALELO`).
+- **Não é chatbot (decidido em 07/11):** o Heitor reage a acontecimentos, ninguém pergunta nada a ele. Quem percebe o acontecimento é **código comum, sem LLM** (o vigia da pasta, `heitor/api/vigia.py`); o agente só é acordado quando algo mudou. Gatilhos da demo: **1** mudança na pasta (pronto), **2** prazo de pendência vencendo e **7** resumo diário (a fazer).
 
 ### Guarda-corpos
 - Limite de **12 passos por funcionário** e de tempo total.
@@ -141,7 +144,8 @@ Sempre chamar de **"exposição potencial máxima, se a perícia confirmar a ins
 heitor/
   dados/    Gustavo   caepi.py, regras.py, funcoes.py, exposicao.py
   agente/   Sofia     grafo.py, ferramentas.py, extracao.py, relatorio.py
-  api/      Pierre    main.py, rotas/, estado.py, notificacao.py
+  api/      Pierre    main.py, rotas/, estado.py, execucao.py, ferramentas.py, notificacao.py,
+                      vigia.py + fontes.py (gatilho 1: pasta do Drive), fotos.py (foto → funcionário)
   web/      Luciana   interface
 ```
 
@@ -201,9 +205,13 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 
 | Método | Rota | O que faz | Usado em |
 |---|---|---|---|
-| POST | `/auditorias` | Recebe fichas (CSV ou foto); cria a auditoria e roda o agente em segundo plano | Upload |
-| GET | `/auditorias/{id}` | Status, contagem por gravidade, exposição total | Painel |
-| GET | `/auditorias/{id}/eventos` | **SSE** do log do agente (ferramenta, resultado, custo por passo) | Log ao vivo |
+| POST | `/auditorias` | `arquivos` (planilhas: a fonte dos dados), `fotos` (fichas de papel) e `funcionarios_das_fotos` (id de cada foto, na mesma ordem; sem ele, vale a matrícula no nome do arquivo, ex.: `0302.jpg`). Com foto, chama `conferir_e_auditar`. Roda em segundo plano | Upload |
+| GET | `/auditorias` | Lista, a mais recente primeiro, com `disparado_por` (ex.: "mudança na pasta: fichas.csv") | Painel |
+| GET | `/auditorias/{id}` | Status, contagem por gravidade, exposição total, `modo`, `modo_por_funcionario`, custo | Painel |
+| GET | `/auditorias/{id}/eventos` | **SSE** do log de uma auditoria (`event: evento` e `event: status`) | Log ao vivo |
+| GET | `/eventos` | **SSE com tudo o que o Heitor faz**, de todas as auditorias, inclusive as disparadas pelo vigia | Feed da tela principal |
+| GET | `/fontes` | O que o vigia observa, última verificação, último disparo, fotos sem dono | Equipe |
+| POST | `/fontes/verificar` | Força uma verificação da pasta agora (depuração) | Equipe |
 | GET | `/auditorias/{id}/achados` | Achados com tipo, gravidade e evidência | Lista de achados |
 | GET | `/auditorias/{id}/relatorio` | Relatório com normas e súmulas | Relatório |
 | GET | `/pendencias` | Lista, filtros `auditoria_id`, `destino`, `status` | Painel de pendências |
@@ -213,9 +221,17 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 | POST | `/demo/reset` | Volta ao dataset fixo | Demo |
 | GET | `/health` | Saúde do serviço | — |
 
-- Estado em memória (ou SQLite se precisar sobreviver a reinício).
+- Estado em memória: reiniciar o servidor apaga tudo, e o vigia audita a pasta inteira de novo.
 - CORS liberado para a interface.
-- **Como a correção chega:** primeiro pelo endpoint `POST /pendencias/{id}/resposta` (garantia para a demo). Se sobrar tempo, também pela leitura periódica da planilha (`ler_fonte` com hash por linha), sem tela de envio.
+
+### Gatilho 1: vigia da pasta do Drive (`heitor/api/vigia.py`)
+- **Configuração (`.env`):** `HEITOR_DRIVE_PASTA` (id da pasta) e `HEITOR_DRIVE_CREDENCIAIS` (chave JSON de uma conta de serviço, **fora do repositório**; a pasta é compartilhada com ela como **Leitor**). Sem Drive, `HEITOR_FONTE_PASTA` (pasta local). `HEITOR_VIGIA_INTERVALO` (padrão 10 s; 3 s na demo).
+- Consulta a pasta periodicamente (sem webhook) e **só age quando o arquivo aparece igual em duas consultas** (não lê edição pela metade). Lê só o que mudou e audita só os funcionários que mudaram. Planilha do Google é comparada pelo **conteúdo exportado**: a versão muda na hora, mas o CSV demora a refletir a edição.
+- **Foto na pasta = anexo do funcionário** (matrícula no nome do arquivo), nunca fonte de dados. Foto sem dono aparece em `GET /fontes`.
+- **Conciliação** depois da auditoria disparada: o problema sumiu → **fecha** a pendência; continua → fica como está (sem duplicar nem reavisar); a linha antiga foi **apagada** → **não fecha** (apagar não corrige); a regra não rodou → não fecha.
+- **Nunca altera a pasta:** só lê.
+- **Tempo medido (Drive real):** ~22 s da edição até a auditoria (~15 s são o atraso do Google), mais 15 a 40 s do agente com LLM para 1 ou 2 funcionários.
+- O Google Sheets tira o zero da frente das matrículas (`0302` → `302`): formatar a coluna como texto. A ligação de foto ignora zeros à esquerda.
 
 ---
 
@@ -292,6 +308,8 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 - [x] Tabela função → EPI: só ruído (NR-15, Anexos 1 e 2); EPI a mais não é falha.
 - [x] Base CAEPI: `RelatorioCA_20261107_114519.csv` em `dados/`.
 - [x] Foto: confere a assinatura contra a planilha (não é fonte de dados).
+- [x] Não é chatbot: gatilhos 1 (pasta do Drive, pronto), 2 (prazo vencendo) e 7 (resumo diário). O 4 (nova base CAEPI) está em avaliação.
+- [ ] Deploy: Hugging Face Spaces (grátis, 16 GB) ou Railway (~US$ 5/mês). A API usa ~400 MB com a base CAEPI.
 - [ ] Quem gera o conjunto de teste independente (com sujeira).
 - [ ] Preço: resposta de 3–4 consultorias de SST (pagariam pela auditoria contínua? quanto por trabalhador?).
 - [ ] Langfuse ou log próprio (log próprio já atende).
