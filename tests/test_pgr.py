@@ -6,6 +6,9 @@ from heitor.contrato import Linha
 from heitor.dados.exposicao import calcula_exposicao
 from heitor.dados.funcoes import categoria_epi, exigencia_funcao
 from heitor.dados.regras import audita_funcionario, audita_linha
+from heitor.dados.caepi import CAMINHO
+
+precisa_base = pytest.mark.skipif(not CAMINHO.exists(), reason="CSV do CAEPI não está em dados/")
 
 HOJE = date(2026, 11, 7)
 
@@ -34,6 +37,7 @@ def pgr(monkeypatch):
     monkeypatch.setenv("HEITOR_PGR", "completo")
 
 
+@precisa_base
 @pytest.mark.parametrize("valor", [None, "", "parcial", "COMPLETO", "1", "true"])
 def test_chave_desligada_mantem_so_protetor_auditivo(monkeypatch, valor):
     if valor is None:
@@ -89,6 +93,7 @@ def test_protetor_auditivo_continua_ruido(pgr):
     assert regras(a) == ["epi_inadequado"] and a[0]["agente_nocivo"] == "ruído"
 
 
+@precisa_base
 def test_agente_na_assinatura_passiva_segue_o_epi_da_linha(pgr):
     sem = {"assinatura": False}
     assert audita_linha(dicts([L(1, "protetor auditivo", date(2026, 10, 1))])[0] | sem, "pedreiro")[0]["agente_nocivo"] == "ruído"
