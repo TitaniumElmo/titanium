@@ -235,9 +235,16 @@ def extrair_linhas(cabecalho: list[str], linhas: list[list[str]], origem: str,
             qtd = int(valor("qtd")) if valor("qtd") else None
         except ValueError:
             qtd = None
+        fid, nome = valor("funcionario_id"), valor("nome")
+        if not data and not valor("epi") and re.search(r"[,;\t|]", fid):
+            # Linha colada sem dividir em colunas ("301,João Silva,servente,..." tudo na coluna A): recupera só
+            # a matrícula e o nome. O agente vê a linha sem data e sem EPI e manda revisar, sem acusar nada.
+            partes = [p.strip() for p in re.split(r"[,;\t|]", fid)]
+            fid, nome = partes[0], nome or (partes[1] if len(partes) > 1 else "")
+            conf["linha"] = 0.0
         saida.append({
-            "funcionario_id": valor("funcionario_id") or str(padrao.get("funcionario_id", "?")),
-            "nome": valor("nome") or padrao.get("nome", ""),
+            "funcionario_id": fid or str(padrao.get("funcionario_id", "?")),
+            "nome": nome or padrao.get("nome", ""),
             "funcao": (valor("funcao") or padrao.get("funcao", "")).lower(),
             "linha": n, "data": data, "epi": valor("epi"), "qtd": qtd if qtd is not None else 1, "ca": ca,
             "motivo": valor("motivo") or None, "assinatura": assinatura,
@@ -279,7 +286,54 @@ def extrair_ficha(arquivo: str, padrao: dict[str, Any] | None = None) -> dict[st
         r = ler_foto(caminho)
         return {"linhas": r["linhas"], "mapeamento": {"origem": "foto", "modelo": r["modelo"],
                                                       "cabecalho": r["cabecalho"], "custo_usd": r["custo_usd"]}}
+    if sufixo == ".pdf":
+        return _ler_pdf(caminho)
     raise ValueError(f"formato não suportado: {sufixo}")
+
+
+MAX_PAGINAS_PDF = 4
+
+
+def paginas_do_pdf(caminho: Path, max_paginas: int = MAX_PAGINAS_PDF) -> list[Path]:
+    """Cada página vira um PNG ao lado do PDF (ficha escaneada ou planilha exportada: a leitura é a da foto)."""
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(str(caminho))
+    try:
+        saida = []
+        for i in range(min(len(pdf), max_paginas)):
+            png = caminho.with_name(f"{caminho.stem}_p{i + 1}.png")
+            pdf[i].render(scale=2).to_pil().save(png)  # ~144 dpi: o bastante para o modelo de visão
+            saida.append(png)
+        return saida
+    finally:
+        pdf.close()
+
+
+def _ler_pdf(caminho: Path) -> dict[str, Any]:
+    """PDF (o RH pode mandar a ficha arquivada assim): lê página por página como foto.
+
+    Documento que não é ficha (nota fiscal, lista de presença) volta sem linhas; a reauditoria
+    então deixa a pendência para conferência humana em vez de reabrir.
+    """
+    from heitor.agente.foto import ler_foto
+
+    linhas: list[Linha] = []
+    cabecalho: dict[str, Any] = {}
+    custo, modelo = 0.0, None
+    paginas = paginas_do_pdf(caminho)
+    for png in paginas:
+        r = ler_foto(png)
+        custo += r["custo_usd"]
+        modelo = modelo or r["modelo"]
+        cabecalho = cabecalho or r["cabecalho"]
+        for l in r["linhas"]:
+            if linhas and l["funcionario_id"] == png.stem:  # página sem cabeçalho: continua a ficha anterior
+                l.update({k: linhas[0][k] for k in ("funcionario_id", "nome", "funcao")})
+            l["linha"] = len(linhas) + 1
+            linhas.append(l)
+    return {"linhas": linhas, "mapeamento": {"origem": "pdf", "modelo": modelo, "cabecalho": cabecalho,
+                                             "custo_usd": round(custo, 6), "paginas": len(paginas)}}
 
 
 def reextrair_campo(arquivo: str, linha: int, campo: str, dados: dict[str, Any] | None = None) -> dict[str, Any] | None:

@@ -83,7 +83,9 @@ Se o documento pedido ao RH não existir, o achado vira pendência ou passivo.
 - Todo passo vira um `Evento` no log (ferramenta, entrada, saída, custo). O log é a prova de autonomia na demo.
 - Demo previsível: temperatura baixa, dataset fixo, vídeo de backup.
 - **Rede de segurança** no fim de cada funcionário: o que o LLM deixou para trás (linha sem auditar, falha sem pendência, foto sem conferir) é feito pelo código e aparece no log como "guarda-corpo". Com ou sem LLM, a auditoria acha **as mesmas falhas**.
-- **Nunca mandar retirar, recolher ou deixar de usar um EPI** (texto assim é trocado pela ação da regra). Nunca sugerir assinar/preencher ficha antiga.
+- **Nunca mandar retirar, recolher ou deixar de usar um EPI** (texto assim é trocado pela ação da regra).
+- **Nunca sugerir assinar, preencher ou alterar registro antigo** (`_sugere_fraude` em `ferramentas.py`): barra quando, na mesma oração, há um verbo que mexe em registro (assinar, colher a assinatura, preencher, alterar, completar, regularizar…) e um alvo no passado (antiga, anterior, data passada, mês, "linha N"). A justificativa depois de ":" ou ", pois" não conta ("colher a assinatura: a última troca foi em 01/12/2025" passa). Texto barrado vira a ação da regra. Casos em `tests/test_guarda_corpo_fraude.py`.
+- **Linha sem data e sem EPI** (ex.: colada inteira na coluna A) não entra nas regras: vira `leitura_incerta` (risco) com pendência "revisar a linha N da planilha", nunca acusação.
 - **CA e data lidos nunca são trocados.** CA que não combina com o EPI (base CAEPI) e data impossível (antes da admissão ou no futuro) viram **conferência no papel**, com o provável e o motivo: pode ser erro de leitura ou de registro, e só o papel diz qual.
 - Tudo o que é dúvida de uma ficha vira **uma** pendência de conferência para o técnico; a mesma ação repetida vira uma pendência listando as linhas.
 - **LLM fora do ar:** timeout de 15 s por provedor; o funcionário segue em modo degradado (política determinística) e o próximo tenta de novo; depois de 2 seguidos, o agente desiste. O resultado traz `modo` (`llm` | `misto` | `deterministico`).
@@ -169,6 +171,8 @@ Fora do LLM (código): `mapear_colunas` e `extrair_ficha` (planilha → `Linha`,
 
 Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compra, lista de presença do treinamento). A conferência no papel vai sempre ao técnico.
 
+**Formatos que `extrair_ficha` lê:** CSV/TXT (planilha), JPG/PNG/WEBP (foto, modelo de visão) e **PDF** (cada página, até 4, vira imagem com `pypdfium2` e passa pela leitura da foto; serve para ficha escaneada e planilha exportada). O modelo de visão lê os itens de uma nota fiscal como "linhas" sem dono: por isso a regra do `aguardando` na resposta a pendência (seção 8).
+
 ### Funções que cruzam módulos
 - **Gustavo → Sofia:** `consulta_ca`, `buscar_ca_proximo`, `exigencia_funcao`, `audita_linha` (lê `na_ficha`, `assinatura_tipo`, `assinatura_texto`), `audita_funcionario`, `audita_fora_da_planilha`, `calcula_exposicao(achados, funcoes=)`.
 - **Pierre → Sofia:** `criar_pendencia`, `fechar_pendencia`, `obter_pendencia`.
@@ -216,7 +220,7 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 | GET | `/auditorias/{id}/relatorio` | Relatório com normas e súmulas | Relatório |
 | GET | `/pendencias` | Lista, filtros `auditoria_id`, `destino`, `status` | Painel de pendências |
 | GET | `/pendencias/{id}` | Detalhe e histórico | Tela do técnico |
-| POST | `/pendencias/{id}/resposta` | Técnico/RH envia ficha corrigida ou documento; dispara reauditoria; devolve novo status | Tela do técnico |
+| POST | `/pendencias/{id}/resposta` | Técnico/RH envia ficha corrigida (CSV, foto ou PDF) ou documento; dispara reauditoria; devolve novo status. Arquivo **sem entregas deste funcionário** (nota fiscal, lista de presença, ficha de outra pessoa) deixa a pendência em `aguardando` para conferência humana, sem fechar nem reabrir | Tela do técnico |
 | GET | `/ca/{numero}?data=` | Consulta de CA (depuração e demo) | Equipe |
 | POST | `/demo/reset` | Volta ao dataset fixo | Demo |
 | GET | `/health` | Saúde do serviço | — |
