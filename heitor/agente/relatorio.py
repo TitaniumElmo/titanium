@@ -61,8 +61,9 @@ _TEXTOS: dict[str, dict[str, Any]] = {
     },
     "epi_inadequado": {
         "titulo": "EPI exigido pela função não aparece na ficha",
-        "explicacao": "A função exige este EPI pelo agente nocivo, mas a ficha não registra nenhuma "
-                      "entrega. O período sem registro é exposição potencial.",
+        "explicacao": "A função exige este EPI pela tabela de riscos da empresa, mas a ficha não registra nenhuma "
+                      "entrega: o trabalhador pode estar sem essa proteção. Só quando o risco é insalubre (ruído) "
+                      "o período sem registro entra na exposição em R$; nos demais, o risco é de acidente.",
         "base": [SUMULA_80, SUMULA_289, "Art. 166 da CLT: a empresa deve fornecer EPI gratuitamente."],
     },
     "troca_atrasada": {
