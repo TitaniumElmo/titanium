@@ -360,7 +360,17 @@ def _t_conferir_ficha_de_papel(ctx: Contexto, args: dict) -> Resultado:
         return Resultado({"info": "não há foto da ficha de papel deste funcionário"}, ok=False)
     if ctx.papel_conferido:
         return Resultado({"info": "a ficha de papel deste funcionário já foi conferida"}, ok=False)
-    r = CAS.conferir_assinaturas(ctx.foto, list(ctx.linhas.values()))
+    # O campo de treinamento é lido numa pergunta à parte, AO MESMO TEMPO que as assinaturas (não soma tempo).
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        futuro_treinamento = ex.submit(CAS.ler_treinamento, ctx.foto)
+        r = CAS.conferir_assinaturas(ctx.foto, list(ctx.linhas.values()))
+        try:
+            treinamento = futuro_treinamento.result()
+        except Exception as e:  # noqa: BLE001 — o treinamento é extra: a conferência segue sem ele
+            log.warning("leitura do treinamento falhou (%s): %r", ctx.funcionario_id, e)
+            treinamento = {"estado": "nao_lido", "data": None, "custo_usd": 0.0}
     ctx.papel_conferido = True
     # O papel substitui a avaliação de assinatura feita só com a planilha (ainda sem pendência).
     for a in list(ctx.achados_do_funcionario()):
@@ -379,6 +389,7 @@ def _t_conferir_ficha_de_papel(ctx: Contexto, args: dict) -> Resultado:
                          if a.get("regra") in REGRAS_DA_ASSINATURA]
         novos += _registrar(ctx, so_assinatura)
     novos += _registrar(ctx, IMPL["audita_fora_da_planilha"](r["fora_da_planilha"], ctx.funcionario_id))
+    novos += _registrar(ctx, achado_de_treinamento(ctx, treinamento))
     linhas = r["linhas"]
     return Resultado({
         "entregas": len(linhas),
@@ -387,8 +398,24 @@ def _t_conferir_ficha_de_papel(ctx: Contexto, args: dict) -> Resultado:
                                         if not (l.get("assinatura") is True and l["confianca"].get("assinatura", 0) >= 0.7)],
         "linhas_no_papel_fora_da_planilha": r["fora_da_planilha"],
         "novos_achados": [_resumo_achado(a) for a in novos],
-        "custo_usd": r["custo_usd"],
+        "treinamento_na_ficha": {k: treinamento.get(k) for k in ("estado", "data")},
+        "custo_usd": round(r["custo_usd"] + float(treinamento.get("custo_usd") or 0), 6),
     })
+
+
+def achado_de_treinamento(ctx: Contexto, treinamento: dict[str, Any]) -> list[Achado]:
+    """Só o campo de treinamento que EXISTE e está em branco vira achado.
+
+    Risco (não irregular): o campo vazio não prova que faltou treinamento (a lista de presença pode existir) e a
+    leitura da foto pode errar. Formulário sem o campo, campo ilegível ou data lida: nada. Medido em 14 fotos
+    (08/11): 3 de 5 campos vazios pegos, nenhum campo preenchido lido como vazio.
+    """
+    if treinamento.get("estado") != "vazio":
+        return []
+    return [{"id": f"trein-{ctx.funcionario_id}", "funcionario_id": ctx.funcionario_id, "auditoria_id": ctx.auditoria_id,
+             "linha": None, "regra": "treinamento_ausente", "gravidade": "risco", "tipo": "prova",
+             "evidencia": "campo \"Treinamento sobre uso do EPI\" em branco na ficha de papel",
+             "acao_sugerida": "pedir ao RH a lista de presença do treinamento sobre uso do EPI"}]
 
 
 def _t_historico_da_empresa(ctx: Contexto, args: dict) -> Resultado:
