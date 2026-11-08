@@ -19,6 +19,10 @@ A cada `intervalo_s`, o vigia lista a fonte (Drive ou pasta local) e:
    - a auditoria nova não rodou a regra daquele problema (o LLM pulou uma
      etapa ou ela falhou) -> não fecha: ausência de prova não é correção.
 
+Ao ver um arquivo já lido mudar, o vigia espera uma verificação para confirmar que
+parou de mudar e avisa no feed global (evento "edicao_detectada", auditoria_id "vigia").
+A cada ciclo ele também cobra pendências com prazo vencido (heitor/api/cobranca.py).
+
 Nenhum passo altera a fonte. Todo trabalho disparado registra a origem
 ("disparado por: mudança na pasta: <arquivos>").
 """
@@ -34,7 +38,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from heitor.api import config, execucao, ferramentas
+from heitor.api import cobranca, config, execucao, ferramentas
 from heitor.api.fotos import dono_da_foto
 from heitor.api.estado import estado
 from heitor.api.fontes import ArquivoFonte, Fonte, PastaDrive, PastaLocal
@@ -42,6 +46,7 @@ from heitor.contrato import Linha
 
 log = logging.getLogger("heitor.vigia")
 
+AUDITORIA_GLOBAL = "vigia"  # auditoria_id dos eventos do vigia que ainda não pertencem a uma auditoria
 _CAMPOS_DA_ENTREGA = ("funcionario_id", "nome", "funcao", "data", "epi", "qtd", "ca", "motivo", "assinatura")
 
 
@@ -127,6 +132,10 @@ class Vigia:
                 self.verificar()
             except Exception:  # o vigia nunca morre: tenta de novo no próximo ciclo
                 log.exception("verificação falhou")
+            try:
+                cobranca.cobrar_atrasadas()
+            except Exception:
+                log.exception("cobrança de prazos vencidos falhou")
             self._parar.wait(self.intervalo_s)
 
     # -- uma verificação --------------------------------------------------------
@@ -170,8 +179,18 @@ class Vigia:
             elif self._candidatos.get(a.id) == a.assinatura:
                 prontos.append(a)  # igual em duas verificações seguidas: parou de mudar
             else:
+                if a.id in self._processados:  # arquivo já lido mudou: ainda pode estar em edição
+                    self._edicao_detectada(a)
                 self._candidatos[a.id] = a.assinatura
         return prontos
+
+    def _edicao_detectada(self, a: ArquivoFonte) -> None:
+        """Ainda não há auditoria: o evento vai no feed global (GET /eventos) com auditoria_id "vigia"."""
+        dados = {"fonte": self.fonte.descricao, "arquivo": a.nome, "aguardando_segundos": self.intervalo_s}
+        execucao.emitir_evento(AUDITORIA_GLOBAL, {
+            "passo": 0, "tipo": "ferramenta", "ferramenta": "edicao_detectada",
+            "entrada": dict(dados), "saida": dict(dados),
+        })
 
     def _remover_ausentes(self, ids: set[str]) -> list[str]:
         for some in [i for i in self._candidatos if i not in ids]:
@@ -240,7 +259,9 @@ class Vigia:
         linhas = [l for f in sorted(funcionarios) for l in _juntar(grupos[f])]
         fotos = {f: caminho for f, (_, caminho) in self._fotos_por_funcionario().items() if f in funcionarios}
         auditoria_id = estado.novo_id("au")
-        estado.criar_auditoria(auditoria_id, arquivos, disparado_por=origem)
+        estado.criar_auditoria(
+            auditoria_id, arquivos, disparado_por="alteracao_planilha", descricao_disparo=origem
+        )
         execucao.em_segundo_plano(_auditar_e_conciliar, auditoria_id, linhas, origem, fotos)
         return auditoria_id
 
@@ -296,7 +317,7 @@ def conciliar(auditoria_id: str, linhas: list[Linha]) -> list[dict[str, str]]:
             elif chave[1] == "entrega" and (f, *chave[2:]) not in entregas:
                 motivo, fechar = "a entrega original não está mais na ficha; apagar linha antiga não corrige", False
             else:
-                motivo, fechar = f"o problema não aparece mais na auditoria {auditoria_id} ({aud.disparado_por})", True
+                motivo, fechar = f"o problema não aparece mais na auditoria {auditoria_id} ({aud.descricao_disparo or aud.disparado_por})", True
 
             if fechar:
                 ferramentas.fechar_pendencia(p.id, True, motivo)

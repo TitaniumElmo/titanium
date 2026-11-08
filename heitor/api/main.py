@@ -78,4 +78,4 @@ def demo_reset() -> Auditoria:
     estado.limpar()
     if vigia.vigia:
         vigia.vigia.esquecer()
-    return auditorias.criar_e_iniciar([str(config.FICHA_EXEMPLO)])
+    return auditorias.criar_e_iniciar([str(config.FICHA_EXEMPLO)], disparado_por="manual")

@@ -66,23 +66,37 @@ def criar_pendencia(
             estado.salvar_achado(achado)
         return _json(mesma)
 
+    auditoria = estado.obter_auditoria(auditoria_id) if auditoria_id else None
     pendencia = Pendencia(
         id=estado.novo_id("p"),
         achado_id=achado.id,
         auditoria_id=auditoria_id,
         funcionario_id=achado.funcionario_id,
+        funcionario_nome=_nome_do_funcionario(auditoria_id, achado.funcionario_id),
+        disparado_por=auditoria.disparado_por if auditoria else None,
         destino=destino,
         acao=acao,
         motivo=achado.evidencia,
         prazo=prazo,
         status="aberta",
-        historico=[HistoricoPendencia(status="aberta", ts=datetime.now(), nota="criada pela auditoria")],
+        historico=[HistoricoPendencia(
+            status="aberta", ts=datetime.now(), nota="criada pela auditoria", etapa="pedir_correcao", ator="agente"
+        )],
     )
     if auditoria_id:
         estado.salvar_achado(achado)
     estado.salvar_pendencia(pendencia)
-    notificar(pendencia)
+    notificar(pendencia, acao_da_regra=achado.acao_sugerida)  # o e-mail leva o texto da regra, não o do LLM
     return _json(pendencia)
+
+
+def _nome_do_funcionario(auditoria_id: Optional[str], funcionario_id: str) -> Optional[str]:
+    if not auditoria_id:
+        return None
+    for l in estado.obter_linhas(auditoria_id):
+        if l.funcionario_id == funcionario_id:
+            return l.nome
+    return None
 
 
 def _chave_do_problema(achado: Achado) -> tuple:
@@ -130,9 +144,14 @@ def fechar_pendencia(
         resultado = r in _CONFERE
 
     if resultado:
-        return _json(mudar_status(pendencia_id, "fechada", nota or "reauditoria conferiu a correção"))
-    p = mudar_status(pendencia_id, "reaberta", nota or "reauditoria não conferiu a correção")
-    notificar(p, assunto="Pendência reaberta pelo Heitor")
+        return _json(mudar_status(
+            pendencia_id, "fechada", nota or "reauditoria conferiu a correção", etapa="conferir", ator="agente"
+        ))
+    p = mudar_status(
+        pendencia_id, "reaberta", nota or "reauditoria não conferiu a correção", etapa="conferir", ator="agente"
+    )
+    achado = estado.obter_achado(p.achado_id, p.auditoria_id)
+    notificar(p, reaberta=True, acao_da_regra=achado.acao_sugerida if achado else None)
     return _json(p)
 
 
@@ -157,8 +176,11 @@ def obter_pendencia(pendencia_id: str) -> Optional[tuple[dict[str, Any], dict[st
 
 def marcar_aguardando(pendencia_id: str, nota: Optional[str] = None) -> Pendencia:
     """Resposta chegou: a pendência aguarda a reauditoria."""
+    atual = estado.obter_pendencia(pendencia_id)
+    rh = atual is not None and atual.destino == "rh"
     return mudar_status(
-        pendencia_id, "aguardando", nota or "resposta recebida", exigir=("aberta", "reaberta")
+        pendencia_id, "aguardando", nota or "resposta recebida", exigir=("aberta", "reaberta"),
+        etapa="comprovar" if rh else "corrigir", ator="rh" if rh else "tecnico",
     )
 
 
@@ -167,11 +189,13 @@ def mudar_status(
     novo: StatusPendencia,
     nota: Optional[str] = None,
     exigir: Optional[tuple[StatusPendencia, ...]] = None,
+    etapa: Optional[str] = None,
+    ator: Optional[str] = None,
 ) -> Pendencia:
     def aplicar(p: Pendencia) -> None:
         if exigir and p.status not in exigir:
             raise TransicaoInvalida(f"pendência {p.id} está '{p.status}'; esperado {', '.join(exigir)}")
         p.status = novo
-        p.historico.append(HistoricoPendencia(status=novo, ts=datetime.now(), nota=nota))
+        p.historico.append(HistoricoPendencia(status=novo, ts=datetime.now(), nota=nota, etapa=etapa, ator=ator))
 
     return estado.atualizar_pendencia(pendencia_id, aplicar)

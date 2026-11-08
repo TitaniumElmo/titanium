@@ -19,7 +19,10 @@ class Auditoria(BaseModel):
     concluida_em: Optional[datetime] = None
     arquivos: list[str] = Field(default_factory=list)
     erro: Optional[str] = None
-    disparado_por: Optional[str] = None  # ex.: "mudança na pasta: ficha_0302.csv"; None = upload manual
+    disparado_por: Optional[str] = None  # alteracao_planilha | prazo_vencido | rotina | manual | upload
+    descricao_disparo: Optional[str] = None  # ex.: "mudança na pasta: ficha_0302.csv"
+    n_fichas: int = 0  # funcionários (fichas) distintos que entram na auditoria
+    n_linhas: int = 0
     # Vindos do resultado de rodar_auditoria (agente), quando ele devolve.
     exposicao: Optional[dict[str, Any]] = None  # {"total_brl", "salario_minimo", ...}
     relatorio: Optional[dict[str, Any]] = None  # {"itens", "texto", ...}

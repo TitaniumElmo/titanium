@@ -145,10 +145,43 @@ def test_protetor_em_intervalos_de_140_150_e_170_dias_nao_atrasa():
     assert audita_funcionario(ls, "servente", hoje=date(2026, 6, 1)) == []
 
 
-def test_protetor_com_intervalo_de_340_dias_atrasa_uma_vez():
+def test_protetor_com_intervalo_de_340_dias_e_troca_passado():
     ls = [L(1, "protetor auditivo", date(2025, 1, 1)), L(2, "protetor auditivo", date(2025, 12, 7))]
     a = audita_funcionario(ls, "servente", hoje=date(2026, 1, 15))
-    assert regras(a) == ["troca_atrasada"] and "340 dias" in a[0].evidencia
+    assert regras(a) == ["troca_passado"]
+    assert (a[0].gravidade, a[0].tipo, a[0].linha) == ("irregular", "passivo", None)
+    assert a[0].evidencia == "protetor auditivo: 340 dias entre 2025-01-01 e 2025-12-07; vida útil 180 dias"
+    assert a[0].acao_sugerida == "registrar no relatório (não tem conserto)"
+
+
+def test_funcionario_0406_antes_e_depois_da_troca():
+    antes = audita_funcionario([L(1, "protetor auditivo", date(2025, 12, 1))], "servente", hoje=HOJE)
+    assert regras(antes) == ["troca_atrasada"]
+    assert (antes[0].gravidade, antes[0].tipo, antes[0].acao_sugerida) == ("irregular", "corrigivel", "trocar protetor auditivo agora")
+
+    depois = audita_funcionario([L(1, "protetor auditivo", date(2025, 12, 1)),
+                                 L(2, "protetor auditivo", date(2026, 11, 7))], "servente", hoje=HOJE)
+    assert regras(depois) == ["troca_passado"]
+    assert (depois[0].gravidade, depois[0].tipo) == ("irregular", "passivo") and "341 dias" in depois[0].evidencia
+
+
+def test_intervalo_de_140_dias_nao_gera_nada():
+    ls = [L(1, "protetor auditivo", date(2026, 5, 1)), L(2, "protetor auditivo", date(2026, 9, 18))]
+    assert audita_funcionario(ls, "servente", hoje=HOJE) == []
+
+
+def test_intervalo_estourado_e_ultima_entrega_estourada_geram_os_dois():
+    ls = [L(1, "protetor auditivo", date(2025, 1, 1)), L(2, "protetor auditivo", date(2025, 12, 7))]
+    a = audita_funcionario(ls, "servente", hoje=HOJE)
+    assert regras(a) == ["troca_atrasada", "troca_passado"]
+    assert {x.regra: x.tipo for x in a} == {"troca_passado": "passivo", "troca_atrasada": "corrigivel"}
+
+
+def test_um_troca_passado_por_intervalo_estourado():
+    ls = [L(1, "protetor auditivo", date(2024, 1, 1)), L(2, "protetor auditivo", date(2025, 1, 1)),
+          L(3, "protetor auditivo", date(2026, 1, 1)), L(4, "protetor auditivo", date(2026, 10, 1))]
+    a = audita_funcionario(ls, "servente", hoje=HOJE)
+    assert regras(a) == ["troca_passado"] * 3
 
 
 def test_troca_atrasada():

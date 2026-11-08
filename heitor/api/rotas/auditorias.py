@@ -31,10 +31,13 @@ def criar_e_iniciar(
     caminhos: list[str],
     auditoria_id: Optional[str] = None,
     fotos: Optional[list[tuple[str, Optional[str]]]] = None,
+    disparado_por: str = "upload",
 ) -> Auditoria:
     auditoria_id = auditoria_id or estado.novo_id("au")
     fotos = fotos or []
-    aud = estado.criar_auditoria(auditoria_id, [Path(c).name for c in caminhos] + [Path(f).name for f, _ in fotos])
+    aud = estado.criar_auditoria(
+        auditoria_id, [Path(c).name for c in caminhos] + [Path(f).name for f, _ in fotos], disparado_por=disparado_por
+    )
     execucao.iniciar_auditoria(aud.id, caminhos, fotos)
     return aud
 
