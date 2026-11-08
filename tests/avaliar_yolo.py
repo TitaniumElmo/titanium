@@ -7,6 +7,8 @@ Só funciona em ficha impressa com grade. Passos:
      (só as que caem dentro da coluna Assinatura);
   4. método tinta: fração de pixels escuros na célula de assinatura (sem as linhas da grade).
 
+Fora do requirements.txt (só este script usa): pip install onnxruntime opencv-python-headless numpy
+
 Uso:
     python -m tests.avaliar_yolo <pasta_fotos> <pasta_modelos_onnx> <pasta_gabaritos> [mais pastas de gabarito...]
 Imagens de depuração vão para --debug <pasta>.
