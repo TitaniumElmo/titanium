@@ -34,6 +34,7 @@ async def ciclo_de_vida(app: FastAPI):
     """Liga o vigia da pasta (gatilho 1) se houver fonte no .env. Se a fonte
     falhar ao conectar, a API sobe mesmo assim (upload continua funcionando).
     Sem vigia, a cobrança de prazos vencidos (gatilho 2) roda num relógio próprio."""
+    cobranca.avisar_prazo_teste()
     try:
         v = vigia.criar_da_config()
         if v:
