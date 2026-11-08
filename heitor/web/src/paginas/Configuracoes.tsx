@@ -66,7 +66,7 @@ export function Configuracoes() {
             chave="prazo_padrao_dias"
             unidade="dias"
             minimo={1}
-            maximo={60}
+            maximo={30}
           />
           <CampoNumero
             rotulo="Antecedência do aviso de troca"
@@ -74,7 +74,7 @@ export function Configuracoes() {
             chave="antecedencia_troca_dias"
             unidade="dias"
             minimo={1}
-            maximo={90}
+            maximo={60}
           />
           <CampoNumero
             rotulo="Intervalo de leitura da planilha"
@@ -82,7 +82,7 @@ export function Configuracoes() {
             chave="intervalo_leitura_s"
             unidade="seg."
             minimo={5}
-            maximo={3600}
+            maximo={300}
           />
         </div>
       </Cartao>

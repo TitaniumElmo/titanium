@@ -3,11 +3,13 @@
  * leem o mesmo `Mundo` e não sabem de onde ele vem.
  *
  * - Dados: consulta periódica de GET /auditorias, /auditorias/{id}, /auditorias/{id}/achados,
- *   /pendencias e /fontes.
+ *   /pendencias, /fontes, /fichas, /funcionarios, /cronograma, /relatorio e /configuracoes.
+ *   As três últimas visões e as configurações são opcionais: numa API antiga, sem essas rotas,
+ *   as telas calculam sozinhas (derivados.ts) e as configurações ficam só locais.
  * - Log ao vivo: SSE GET /eventos (tudo o que o Elmo faz, inclusive o vigia).
  *
  * Quem decide o que é falha são as regras do back-end; aqui só se mostra o que a API devolve.
- * O que a API ainda não tem (entregas da planilha, configurações, relógio da demo) fica vazio
+ * O que a API ainda não tem (relógio da demo, treinamento e DDS no cronograma) fica vazio
  * ou só local, nunca inventado.
  */
 import type { Mundo, FuncionarioBase } from "./mock";
@@ -19,10 +21,13 @@ import type {
   EntradaHistorico,
   Evento,
   Fonte,
+  Funcionario,
   Gatilho,
   ItemAtividade,
+  ItemCronograma,
   Linha,
   Pendencia,
+  Relatorio,
 } from "./tipos";
 
 const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
@@ -80,6 +85,11 @@ type FontesApi = {
   colunas?: Record<string, ColunaApi[]>;
 };
 
+// GET /funcionarios: datas nulas quando a pessoa não tem entrega ou troca prevista.
+type FuncionarioApi = Omit<Funcionario, "ultima_entrega" | "proxima_troca"> & { ultima_entrega: string | null; proxima_troca: string | null };
+type RelatorioApi = Omit<Relatorio, "acerto"> & { acerto?: Relatorio["acerto"] };
+const PERIODOS_RELATORIO = [7, 30, 90] as const;
+
 type EventoApi = Omit<Evento, "saida"> & { saida: unknown };
 // GET /fichas: {funcionario_id: entregas}, cada um com a ficha da auditoria mais recente que o incluiu.
 type LinhaApi = Omit<Linha, "data" | "motivo"> & { data: string | null; motivo: string | null };
@@ -96,6 +106,11 @@ const cache = {
   funcaoDe: new Map<string, string>(), // funcionário -> função (vinda do log: exigencia_funcao ou auditar_ficha)
   fichas: {} as Record<string, LinhaApi[]>, // entregas da planilha por funcionário (GET /fichas)
   edicao: null as { ts: string; descricao: string; visto_em: number } | null,
+  funcionarios: null as Funcionario[] | null, // GET /funcionarios
+  cronograma: null as ItemCronograma[] | null, // GET /cronograma
+  relatorios: {} as Partial<Record<number, Relatorio>>, // GET /relatorio?dias=7|30|90
+  assinaturaRelatorio: "", // o relatório só é pedido de novo quando auditorias ou pendências mudam
+  configNaApi: false, // GET /configuracoes respondeu: a tela de Configurações vale de verdade
   config: { ...CONFIG_PADRAO },
   empresa: EMPRESA,
 };
@@ -172,11 +187,14 @@ async function consultar() {
   if (consultando) return;
   consultando = true;
   try {
-    const [auditorias, pendencias, fontes, fichas] = await Promise.all([
+    const [auditorias, pendencias, fontes, fichas, funcionarios, cronograma, configuracao] = await Promise.all([
       pegar<AuditoriaApi[]>("/auditorias"),
       pegar<PendenciaApi[]>("/pendencias"),
       pegar<FontesApi>("/fontes"), // 404 quando não há vigia (deploy sem pasta)
       pegar<Record<string, LinhaApi[]>>("/fichas"), // null em API antiga, sem a rota: a ficha fica vazia
+      pegar<FuncionarioApi[]>("/funcionarios"), // null em API antiga: a lista é calculada na tela
+      pegar<ItemCronograma[]>("/cronograma"),
+      pegar<Configuracao>("/configuracoes"),
     ]);
     if (auditorias === null) return; // API fora: mantém o que tinha
 
@@ -202,11 +220,38 @@ async function consultar() {
     cache.auditorias = auditorias;
     if (pendencias) cache.pendencias = pendencias;
     if (fichas) cache.fichas = fichas;
+    if (funcionarios) cache.funcionarios = funcionarios.map(paraFuncionario);
+    if (cronograma) cache.cronograma = cronograma;
+    if (configuracao) {
+      cache.config = configuracao;
+      cache.configNaApi = true;
+    }
     cache.fontes = fontes;
+    await atualizarRelatorios(auditorias, pendencias);
     atualizar();
   } finally {
     consultando = false;
   }
+}
+
+function paraFuncionario(f: FuncionarioApi): Funcionario {
+  return { ...f, ultima_entrega: f.ultima_entrega ?? "", proxima_troca: f.proxima_troca ?? "" };
+}
+
+/** Os três períodos da tela (7, 30 e 90 dias). Pede de novo só quando algo mudou no servidor. */
+async function atualizarRelatorios(auditorias: AuditoriaApi[], pendencias: PendenciaApi[] | null) {
+  const assinatura = JSON.stringify([
+    auditorias.map((a) => [a.id, a.status]),
+    (pendencias ?? cache.pendencias).map((p) => [p.id, p.status]),
+    new Date().toDateString(),
+  ]);
+  if (assinatura === cache.assinaturaRelatorio) return;
+  const respostas = await Promise.all(PERIODOS_RELATORIO.map((dias) => pegar<RelatorioApi>(`/relatorio?dias=${dias}`)));
+  respostas.forEach((r, i) => {
+    const dias = PERIODOS_RELATORIO[i];
+    if (r && dias !== undefined) cache.relatorios[dias] = { acerto: null, ...r };
+  });
+  if (respostas.every((r) => r)) cache.assinaturaRelatorio = assinatura;
 }
 
 function esquecerTudo() {
@@ -216,6 +261,10 @@ function esquecerTudo() {
   cache.eventos = {};
   cache.funcaoDe.clear();
   cache.fichas = {};
+  cache.funcionarios = null;
+  cache.cronograma = null;
+  cache.relatorios = {};
+  cache.assinaturaRelatorio = "";
   cache.edicao = null;
   abrirSse(); // o log do servidor recomeçou do zero: lê de novo desde o início
 }
@@ -467,6 +516,7 @@ function montarMundo(): Mundo {
     leituras: cache.fontes?.verificacoes ?? 0,
     contadores: {},
     edicao: cache.edicao ? { ts: cache.edicao.ts, descricao: cache.edicao.descricao } : null,
+    visoes: { funcionarios: cache.funcionarios, cronograma: cache.cronograma, relatorios: cache.relatorios },
   };
 }
 
@@ -508,8 +558,29 @@ export function resetarDemo() {
 }
 
 export function atualizarConfig(parcial: Partial<Configuracao>) {
-  cache.config = { ...cache.config, ...parcial }; // só nesta tela: a API não tem configurações
+  cache.config = { ...cache.config, ...parcial }; // aparece na hora; se a API recusar, a próxima consulta devolve o valor dela
   atualizar();
+  if (cache.configNaApi) void gravarConfig(parcial);
+}
+
+/** PUT /configuracoes. Com HEITOR_TOKEN_ADMIN no servidor, vale a senha do time guardada na tela de Fontes. */
+async function gravarConfig(parcial: Partial<Configuracao>) {
+  try {
+    const token = tokenGuardado();
+    const r = await fetch(`${BASE}/configuracoes`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...(token ? { "X-Heitor-Token": token } : {}) },
+      body: JSON.stringify(parcial),
+    });
+    if (r.ok) {
+      cache.config = (await r.json()) as Configuracao;
+      atualizar();
+    } else {
+      console.warn(`[elmo] PUT /configuracoes: ${r.status} ${await r.text().catch(() => "")}`);
+    }
+  } catch (e) {
+    console.warn("[elmo] PUT /configuracoes falhou", e);
+  }
 }
 
 // ------------------------------------------------------------- troca de pasta ---

@@ -10,9 +10,12 @@ import type {
   Fonte,
   ErroAgente,
   ForaDaPlanilha,
+  Funcionario,
   Gatilho,
   ItemAtividade,
+  ItemCronograma,
   Linha,
+  Relatorio,
   TipoEvento,
   Pendencia,
 } from "./tipos";
@@ -39,6 +42,12 @@ export type Mundo = {
   contadores: Record<string, number>;
   extras_pendencia_demo?: string;
   edicao: { ts: string; descricao: string } | null;
+  /** Resumos prontos da API (GET /funcionarios, /cronograma, /relatorio). Sem eles, as telas calculam em derivados.ts. */
+  visoes?: {
+    funcionarios: Funcionario[] | null;
+    cronograma: ItemCronograma[] | null;
+    relatorios: Partial<Record<number, Relatorio>>;
+  };
 };
 
 const DIA = 86_400_000;

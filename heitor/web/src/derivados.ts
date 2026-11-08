@@ -57,7 +57,10 @@ function trocasRelevantes(linhas: Linha[], hoje: string): TrocaPrevista[] {
 }
 
 export function resumoFuncionarios(m: Mundo, hoje: string): Funcionario[] {
+  const daApi = new Map((m.visoes?.funcionarios ?? []).map((f) => [f.funcionario_id, f]));
   return m.funcionarios.map((f) => {
+    const pronto = daApi.get(f.funcionario_id);
+    if (pronto) return { ...f, ...pronto, nome: f.nome || pronto.nome, funcao: f.funcao || pronto.funcao };
     const linhas = m.linhas.filter((l) => l.funcionario_id === f.funcionario_id);
     const achados = m.achados.filter((a) => a.funcionario_id === f.funcionario_id && achadoAberto(a, m.pendencias));
     const pendencias = m.pendencias.filter((p) => p.funcionario_id === f.funcionario_id && p.status !== "fechada");
@@ -75,6 +78,7 @@ export function resumoFuncionarios(m: Mundo, hoje: string): Funcionario[] {
 }
 
 export function cronograma(m: Mundo, hoje: string, de: string, ate: string): ItemCronograma[] {
+  if (m.visoes?.cronograma) return m.visoes.cronograma.filter((i) => i.data >= de && i.data <= ate);
   const itens: ItemCronograma[] = [];
   const dentro = (d: string) => d >= de && d <= ate;
   const antecedencia = m.config.antecedencia_troca_dias;
@@ -127,6 +131,8 @@ function semente(n: number): number {
 }
 
 export function relatorio(m: Mundo, hoje: string, dias: number): Relatorio {
+  const daApi = m.visoes?.relatorios[dias];
+  if (daApi) return daApi;
   const serie: Relatorio["serie"] = [];
   const base = paraMs(hoje);
   for (let i = dias - 1; i >= 0; i--) {
