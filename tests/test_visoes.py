@@ -101,3 +101,17 @@ def test_antecedencia_configurada_vale_no_cronograma(client):
     assert not [i for i in visoes.cronograma(de, ate, hoje) if i["tipo"] == "troca_epi"]  # 50 > 15 + 15
     client.put("/configuracoes", json={"antecedencia_troca_dias": 40})
     assert [i for i in visoes.cronograma(de, ate, hoje) if i["tipo"] == "troca_epi"]  # 50 <= 40 + 15
+
+
+def test_restaurar_devolve_o_intervalo_ao_vigia(monkeypatch):
+    from types import SimpleNamespace
+
+    from heitor.api import config, vigia as modulo_vigia
+
+    falso = SimpleNamespace(intervalo_s=config.VIGIA_INTERVALO_S)
+    monkeypatch.setattr(modulo_vigia, "vigia", falso)
+    configuracoes.ajustar(configuracoes.AjusteConfiguracao(intervalo_leitura_s=300))
+    assert falso.intervalo_s == 300 and configuracoes.atual().intervalo_leitura_s == 300
+    configuracoes.restaurar()
+    assert falso.intervalo_s == config.VIGIA_INTERVALO_S
+    assert configuracoes.atual().intervalo_leitura_s == config.VIGIA_INTERVALO_S

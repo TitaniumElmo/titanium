@@ -13,6 +13,7 @@ import threading
 
 from pydantic import BaseModel, Field
 
+from heitor.api import config
 from heitor.api import vigia as modulo_vigia
 
 
@@ -56,6 +57,9 @@ def ajustar(ajuste: AjusteConfiguracao) -> Configuracao:
 
 
 def restaurar() -> None:
+    """Volta aos padrões, inclusive o intervalo do vigia (que `ajustar` grava nele)."""
     global _atual
     with _trava:
         _atual = Configuracao()
+        if modulo_vigia.vigia is not None:
+            modulo_vigia.vigia.intervalo_s = config.VIGIA_INTERVALO_S
