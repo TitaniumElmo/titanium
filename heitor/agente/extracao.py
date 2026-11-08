@@ -35,6 +35,12 @@ _DESCRICAO_CAMPOS = {
     "assinatura": "se o funcionário assinou (sim/não, x, assinado...)",
 }
 
+# Rótulo curto de cada campo, para a tela (tabela de colunas em Fontes).
+ROTULO_CAMPO = {
+    "funcionario_id": "Matrícula", "nome": "Nome", "funcao": "Função", "data": "Data da entrega", "epi": "EPI",
+    "qtd": "Quantidade", "ca": "Nº do CA", "motivo": "Motivo", "assinatura": "Assinatura",
+}
+
 _PALAVRAS: dict[str, tuple[str, ...]] = {
     "funcionario_id": ("matricula", "mat", "codigo", "cod", "id", "registro", "chapa", "re"),
     "nome": ("nome", "funcionario", "colaborador", "empregado", "trabalhador"),
@@ -91,12 +97,13 @@ def _mapear_heuristica(cabecalho: list[str], amostra: list[list[str]]) -> dict[s
     for campo, palavras in _PALAVRAS.items():
         for i, nome in enumerate(cabecalho):
             n = _norm(nome)
-            tokens = set(n.split())
-            nome_bate = n in palavras or bool(tokens & set(palavras)) or any(p in n for p in palavras if len(p) > 3)
+            tokens = set(n.split()) | {t.strip(".") for t in n.split()}  # "Ass." e "Qtd." abreviados com ponto
+            nome_bate = (n in palavras or n.strip(".") in palavras or bool(tokens & set(palavras))
+                         or any(p in n for p in palavras if len(p) > 3))
             if not nome_bate:
                 continue
             conteudo = conferir_conteudo(campo, colunas[i])
-            exato = 0.15 if n in palavras else 0.0
+            exato = 0.15 if (n in palavras or n.strip(".") in palavras) else 0.0
             candidatos.append((0.5 + 0.35 * conteudo + exato, campo, i))
     return _resolver(candidatos, cabecalho, "heuristica")
 
@@ -177,11 +184,33 @@ def mapear_colunas(cabecalho: list[str], amostra: list[list[str]]) -> dict[str, 
             pass
     return {
         "mapeamento": mapa,
+        "colunas": tabela_de_colunas(cabecalho, amostra, mapa),
         "nao_mapeados": [c for c in CAMPOS if c not in mapa],
         "baixa_confianca": [c for c, m in mapa.items() if m["confianca"] < LIMIAR_CONFIANCA],
         "custo_usd": custo,
         "origem": origem,
     }
+
+
+def tabela_de_colunas(cabecalho: list[str], amostra: list[list[str]], mapa: dict[str, dict]) -> list[dict[str, Any]]:
+    """Uma linha por coluna da planilha, na ordem da planilha (para a tela de Fontes).
+
+    [{"indice", "coluna", "campo", "campo_rotulo", "confianca", "origem", "exemplo", "situacao"}]
+    situacao: "entendida" | "conferir" (confiança baixa) | "ignorada" (o Heitor não usa esta coluna).
+    """
+    por_indice = {m["indice"]: (campo, m) for campo, m in mapa.items()}
+    tabela = []
+    for i, nome in enumerate(cabecalho):
+        exemplo = next((str(l[i]).strip() for l in amostra if i < len(l) and str(l[i]).strip()), "")
+        campo, m = por_indice.get(i, (None, {}))
+        conf = m.get("confianca")
+        tabela.append({
+            "indice": i, "coluna": nome, "campo": campo, "campo_rotulo": ROTULO_CAMPO.get(campo or "", None),
+            "confianca": round(conf, 2) if conf is not None else None, "origem": m.get("origem"),
+            "exemplo": exemplo[:40],
+            "situacao": "ignorada" if campo is None else ("conferir" if conf < LIMIAR_CONFIANCA else "entendida"),
+        })
+    return tabela
 
 
 def _combinar(llm: dict[str, dict], heur: dict[str, dict]) -> dict[str, dict]:
