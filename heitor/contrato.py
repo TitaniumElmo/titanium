@@ -44,6 +44,13 @@ Regra = Literal[
     "entrega_sem_ficha",  # está na planilha e não no papel
     "ficha_sem_planilha",  # está no papel e não na planilha
     "leitura_incerta",  # CA, data ou assinatura em dúvida na foto: conferir na ficha física
+    # Exames médicos (ASO, NR-7; heitor/dados/aso.py). Só aparecem com HEITOR_EXAMES=1.
+    "aso_ausente",  # funcionário ativo sem nenhum ASO
+    "aso_periodico_vencido",  # último ASO passou da periodicidade
+    "aso_sem_medico",  # ASO sem nome ou CRM do médico
+    "aso_sem_assinatura_medico",  # ASO sem assinatura do médico (ou ilegível: risco)
+    "aso_admissional_tardio",  # admissional feito depois do início: passivo
+    "aso_inapto_em_atividade",  # último ASO inapto e funcionário ativo
 ]
 
 # PROPOSTA: separa chamada de ferramenta, decisão do LLM e falha no log.
