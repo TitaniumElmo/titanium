@@ -1,0 +1,313 @@
+@import "tailwindcss";
+@import "./fontes.css";
+@import "./tokens.css";
+
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-superficie: var(--superficie);
+  --color-superficie-2: var(--superficie-2);
+  --color-borda: var(--borda);
+  --color-texto: var(--texto);
+  --color-apoio: var(--texto-apoio);
+  --color-fraco: var(--texto-fraco);
+  --color-dica: var(--texto-dica);
+  --color-acento: var(--acento);
+  --color-acento-forte: var(--acento-forte);
+  --color-acento-suave: var(--acento-suave);
+  --color-sobre-acento: var(--sobre-acento);
+
+  --color-irregular: var(--irregular-texto);
+  --color-irregular-fundo: var(--irregular-fundo);
+  --color-irregular-borda: var(--borda-irregular);
+  --color-risco: var(--risco-texto);
+  --color-risco-fundo: var(--risco-fundo);
+  --color-risco-borda: var(--borda-risco);
+  --color-ok: var(--ok-texto);
+  --color-ok-fundo: var(--ok-fundo);
+  --color-ok-borda: var(--borda-ok);
+
+  --color-log-fundo: var(--log-fundo);
+  --color-log-superficie: var(--log-superficie);
+  --color-log-borda: var(--log-borda);
+  --color-log-texto: var(--log-texto);
+  --color-log-apoio: var(--log-apoio);
+  --color-log-fraco: var(--log-fraco);
+  --color-log-terminal: var(--log-terminal);
+  --color-log-alerta: var(--log-alerta);
+  --color-log-alerta-fundo: var(--log-alerta-fundo);
+  --color-log-decisao-fundo: var(--log-decisao-fundo);
+
+  --color-grafico-irregular: var(--grafico-irregular);
+  --color-grafico-risco: var(--grafico-risco);
+  --color-grafico-ok: var(--grafico-ok);
+  --color-grafico-cat-1: var(--grafico-cat-1);
+  --color-grafico-cat-2: var(--grafico-cat-2);
+  --color-grafico-cat-3: var(--grafico-cat-3);
+
+  --color-intro-fundo: var(--intro-fundo);
+  --color-intro-texto: var(--intro-texto);
+
+  --font-*: initial;
+  --font-sans: var(--fonte-sans);
+  --font-mono: var(--fonte-mono);
+  --font-marca: var(--fonte-marca);
+  --font-titulo: var(--fonte-titulo);
+
+  --text-*: initial;
+  --text-xs: var(--tamanho-12);
+  --text-xs--line-height: var(--altura-corpo);
+  --text-sm: var(--tamanho-14);
+  --text-sm--line-height: var(--altura-corpo);
+  --text-base: var(--tamanho-16);
+  --text-base--line-height: var(--altura-corpo);
+  --text-lg: var(--tamanho-18);
+  --text-lg--line-height: var(--altura-label);
+  --text-xl: var(--tamanho-20);
+  --text-xl--line-height: var(--altura-titulo);
+  --text-2xl: var(--tamanho-24);
+  --text-2xl--line-height: var(--altura-titulo);
+  --text-3xl: var(--tamanho-30);
+  --text-3xl--line-height: var(--altura-titulo-grande);
+  --text-4xl: var(--tamanho-36);
+  --text-4xl--line-height: var(--altura-display);
+
+  --font-weight-*: initial;
+  --font-weight-normal: var(--peso-normal);
+  --font-weight-medium: var(--peso-medio);
+  --font-weight-semibold: var(--peso-forte);
+
+  --tracking-titulo: var(--espacamento-titulo);
+  --tracking-sobrescrito: var(--espacamento-sobrescrito);
+
+  --radius-cartao: var(--raio-cartao);
+  --radius-controle: var(--raio-controle);
+  --radius-selo: var(--raio-selo);
+
+  --breakpoint-menu: 900px;
+}
+
+html,
+body {
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: var(--fonte-sans);
+  font-size: var(--tamanho-16);
+  font-weight: var(--peso-normal);
+  line-height: var(--altura-corpo);
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+table,
+time,
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility marca {
+  font-family: var(--fonte-marca);
+  font-stretch: var(--largura-marca);
+  font-weight: var(--peso-forte);
+  letter-spacing: var(--espacamento-titulo);
+}
+
+@utility text-display {
+  font-family: var(--fonte-titulo);
+  font-size: var(--tamanho-36);
+  line-height: var(--altura-display);
+  font-weight: var(--peso-forte);
+  letter-spacing: var(--espacamento-titulo);
+}
+
+@utility text-h1 {
+  font-family: var(--fonte-titulo);
+  font-size: var(--tamanho-30);
+  line-height: var(--altura-titulo-grande);
+  font-weight: var(--peso-forte);
+  letter-spacing: var(--espacamento-titulo);
+}
+
+@utility text-h2 {
+  font-family: var(--fonte-titulo);
+  font-size: var(--tamanho-24);
+  line-height: var(--altura-titulo);
+  font-weight: var(--peso-forte);
+  letter-spacing: var(--espacamento-titulo);
+}
+
+@utility text-h3 {
+  font-family: var(--fonte-titulo);
+  font-size: var(--tamanho-18);
+  line-height: var(--altura-label);
+  font-weight: var(--peso-forte);
+  letter-spacing: 0;
+}
+
+@utility text-body {
+  font-family: var(--fonte-sans);
+  font-size: var(--tamanho-16);
+  line-height: var(--altura-corpo);
+  font-weight: var(--peso-normal);
+  letter-spacing: 0;
+}
+
+@utility text-label {
+  font-family: var(--fonte-sans);
+  font-size: var(--tamanho-14);
+  line-height: var(--altura-label);
+  font-weight: var(--peso-medio);
+  letter-spacing: 0;
+}
+
+@utility text-caption {
+  font-family: var(--fonte-sans);
+  font-size: var(--tamanho-12);
+  line-height: var(--altura-corpo);
+  font-weight: var(--peso-normal);
+  letter-spacing: 0;
+}
+
+@utility text-code {
+  font-family: var(--fonte-mono);
+  font-size: var(--tamanho-13);
+  line-height: var(--altura-trace);
+  font-weight: var(--peso-normal);
+  font-variant-numeric: tabular-nums;
+}
+
+body {
+  background-image: var(--brilho);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--acento-suave);
+}
+
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+@keyframes entrar {
+  from {
+    opacity: 0;
+    transform: translateY(var(--entrar-y, 8px));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulsar {
+  0% {
+    box-shadow: 0 0 0 0 var(--acento-suave);
+    opacity: 1;
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+    opacity: 0.7;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 1;
+  }
+}
+
+@keyframes fechada {
+  0% {
+    background-color: var(--ok-fundo);
+    border-color: var(--borda-ok);
+  }
+  70% {
+    background-color: var(--ok-fundo);
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes ondas-a {
+  from {
+    transform: translate3d(-6%, 4%, 0) scale(1) rotate(-8deg);
+  }
+  to {
+    transform: translate3d(6%, -3%, 0) scale(1.15) rotate(6deg);
+  }
+}
+
+@keyframes ondas-b {
+  from {
+    transform: translate3d(5%, -4%, 0) scale(1.1) rotate(10deg);
+  }
+  to {
+    transform: translate3d(-5%, 5%, 0) scale(0.95) rotate(-4deg);
+  }
+}
+
+.intro-ondas {
+  position: absolute;
+  inset: -20%;
+  filter: blur(48px);
+  background:
+    radial-gradient(38% 22% at 28% 72%, var(--intro-onda-1), transparent 70%),
+    radial-gradient(30% 18% at 70% 66%, var(--intro-onda-2), transparent 70%);
+  animation: ondas-a 7s ease-in-out infinite alternate;
+}
+
+.intro-ondas-2 {
+  position: absolute;
+  inset: -20%;
+  filter: blur(56px);
+  background:
+    radial-gradient(34% 20% at 72% 30%, var(--intro-onda-1), transparent 70%),
+    radial-gradient(26% 16% at 22% 28%, var(--intro-onda-2), transparent 70%);
+  animation: ondas-b 9s ease-in-out infinite alternate;
+}
+
+@keyframes selo {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  40% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animar-selo {
+  animation: selo 420ms ease-out both;
+}
+
+.animar-fechada {
+  animation: fechada 2.6s ease-out both;
+}
+
+.animar-entrar {
+  animation: entrar 400ms ease-out both;
+}
+
+.animar-pulsar {
+  animation: pulsar 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
