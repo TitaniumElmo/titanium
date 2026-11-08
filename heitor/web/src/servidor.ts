@@ -21,6 +21,7 @@ import type {
   Fonte,
   Gatilho,
   ItemAtividade,
+  Linha,
   Pendencia,
 } from "./tipos";
 
@@ -80,6 +81,8 @@ type FontesApi = {
 };
 
 type EventoApi = Omit<Evento, "saida"> & { saida: unknown };
+// GET /fichas: {funcionario_id: entregas}, cada um com a ficha da auditoria mais recente que o incluiu.
+type LinhaApi = Omit<Linha, "data" | "motivo"> & { data: string | null; motivo: string | null };
 
 // --------------------------------------------------------------------- estado ---
 
@@ -90,7 +93,8 @@ const cache = {
   pendencias: [] as PendenciaApi[],
   fontes: null as FontesApi | null,
   eventos: {} as Record<string, Evento[]>,
-  funcaoDe: new Map<string, string>(), // funcionário -> função (vinda do log: exigencia_funcao)
+  funcaoDe: new Map<string, string>(), // funcionário -> função (vinda do log: exigencia_funcao ou auditar_ficha)
+  fichas: {} as Record<string, LinhaApi[]>, // entregas da planilha por funcionário (GET /fichas)
   edicao: null as { ts: string; descricao: string; visto_em: number } | null,
   config: { ...CONFIG_PADRAO },
   empresa: EMPRESA,
@@ -164,10 +168,11 @@ async function consultar() {
   if (consultando) return;
   consultando = true;
   try {
-    const [auditorias, pendencias, fontes] = await Promise.all([
+    const [auditorias, pendencias, fontes, fichas] = await Promise.all([
       pegar<AuditoriaApi[]>("/auditorias"),
       pegar<PendenciaApi[]>("/pendencias"),
       pegar<FontesApi>("/fontes"), // 404 quando não há vigia (deploy sem pasta)
+      pegar<Record<string, LinhaApi[]>>("/fichas"), // null em API antiga, sem a rota: a ficha fica vazia
     ]);
     if (auditorias === null) return; // API fora: mantém o que tinha
 
@@ -192,6 +197,7 @@ async function consultar() {
 
     cache.auditorias = auditorias;
     if (pendencias) cache.pendencias = pendencias;
+    if (fichas) cache.fichas = fichas;
     cache.fontes = fontes;
     atualizar();
   } finally {
@@ -205,6 +211,7 @@ function esquecerTudo() {
   cache.pendencias = [];
   cache.eventos = {};
   cache.funcaoDe.clear();
+  cache.fichas = {};
   cache.edicao = null;
   abrirSse(); // o log do servidor recomeçou do zero: lê de novo desde o início
 }
@@ -236,7 +243,8 @@ function receberEvento(bruto: EventoApi) {
     const arquivo = String((ev.entrada as { arquivo?: unknown }).arquivo ?? "planilha");
     cache.edicao = { ts: ev.ts, descricao: arquivo, visto_em: Date.now() };
   }
-  if (ev.ferramenta === "exigencia_funcao" && ev.funcionario_id) {
+  // A função vem do exigencia_funcao (o LLM nem sempre chama) ou do auditar_ficha (sempre roda).
+  if ((ev.ferramenta === "exigencia_funcao" || ev.ferramenta === "auditar_ficha") && ev.funcionario_id) {
     const funcao = (saida as { funcao?: unknown }).funcao;
     if (typeof funcao === "string" && funcao) cache.funcaoDe.set(ev.funcionario_id, funcao);
   }
@@ -378,6 +386,16 @@ function montarMundo(): Mundo {
   const auditorias = cruas.map(paraAuditoria);
   const pendencias = cache.pendencias.map(paraPendencia);
   const nomeDe = nomes(pendencias);
+  // A planilha também diz nome e função: cobre quem não tem pendência ("Matrícula 0303") e a função vazia.
+  const funcaoDe = new Map(cache.funcaoDe);
+  for (const [fid, ls] of Object.entries(cache.fichas)) {
+    const l = ls.find((x) => x.nome) ?? ls[0];
+    if (l?.nome && !nomeDe.has(fid)) nomeDe.set(fid, l.nome);
+    if (l?.funcao && !funcaoDe.has(fid)) funcaoDe.set(fid, l.funcao);
+  }
+  const linhas: Linha[] = Object.values(cache.fichas)
+    .flat()
+    .map((l) => ({ ...l, data: l.data ?? "", motivo: l.motivo ?? "" }));
 
   const brutos = achadosAtuais(cruas, pendencias);
   const tsDe = new Map(cruas.map((a) => [a.id, a.criada_em]));
@@ -386,11 +404,12 @@ function montarMundo(): Mundo {
     ...pendencias.map((p) => p.funcionario_id),
     ...cruas.flatMap((a) => Object.keys(a.modo_por_funcionario ?? {})),
     ...cache.funcaoDe.keys(),
+    ...Object.keys(cache.fichas),
   ]);
   const funcionarios: FuncionarioBase[] = [...ids].sort().map((id) => ({
     funcionario_id: id,
     nome: nomeDe.get(id) ?? `Matrícula ${id}`,
-    funcao: cache.funcaoDe.get(id) ?? "",
+    funcao: funcaoDe.get(id) ?? "",
   }));
 
   // A API calcula a exposição por funcionário (auditoria.exposicao.por_funcionario), não por achado.
@@ -411,7 +430,7 @@ function montarMundo(): Mundo {
     return {
       ...a,
       nome: nomeDe.get(a.funcionario_id) ?? `Matrícula ${a.funcionario_id}`,
-      funcao: cache.funcaoDe.get(a.funcionario_id) ?? "",
+      funcao: funcaoDe.get(a.funcionario_id) ?? "",
       ts: tsDe.get(a.auditoria_id) ?? new Date().toISOString(),
       exposicao,
     };
@@ -430,7 +449,7 @@ function montarMundo(): Mundo {
     deslocamento_ms: 0,
     fonte: paraFonte(cache.fontes, cruas.length > 0),
     funcionarios,
-    linhas: [], // a API ainda não expõe as entregas da planilha
+    linhas, // GET /fichas
     fora_da_planilha: [],
     achados,
     pendencias,
