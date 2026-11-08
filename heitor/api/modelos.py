@@ -40,6 +40,7 @@ class ResumoAuditoria(Auditoria):
     pendencias_abertas: int
     passos: int
     custo_total_usd: float
+    dias_sem_epi_valido_registrado: dict[str, int] = Field(default_factory=dict)  # funcionário -> dias; ausente = 0
 
 
 class PendenciaDetalhe(Pendencia):

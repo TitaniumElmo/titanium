@@ -11,6 +11,7 @@ from collections import Counter
 from typing import Any
 
 from heitor.agente.tipos import AchadoDict as Achado
+from heitor.dados.dias_sem_epi import dias_sem_epi_valido, texto as dias_texto
 
 AVISO = ("O Heitor aponta lacunas na prova documental das fichas de EPI. Ele não afirma se há "
          "insalubridade: quem a caracteriza é a perícia (art. 195 da CLT).")
@@ -140,12 +141,15 @@ def gerar_relatorio(achados: list[Achado], exposicao: dict[str, Any] | None = No
             "base_legal": t["base"], "acao": a.get("acao_sugerida", ""),
         })
 
+    dias = dias_sem_epi_valido(falhas)
     relatorio: dict[str, Any] = {
         "aviso": AVISO,
         "resumo": {
             "funcionarios": len({a.get("funcionario_id") for a in falhas}),
             "por_gravidade": dict(Counter(a["gravidade"] for a in falhas)),
             "por_tipo": dict(Counter(_TIPO_LEGIVEL.get(a.get("tipo", ""), a.get("tipo")) for a in falhas)),
+            "por_funcionario": {f: {"dias_sem_epi_valido_registrado": d, "texto": dias_texto(d)}
+                                for f, d in sorted(dias.items())},
         },
         "itens": itens,
     }
@@ -167,6 +171,9 @@ def _texto(r: dict[str, Any]) -> str:
         if it["funcionario_id"] != atual:
             atual = it["funcionario_id"]
             linhas.append(f"Funcionário {atual}")
+            extra = r["resumo"].get("por_funcionario", {}).get(atual)
+            if extra:
+                linhas.append(f"  {extra['texto'][0].upper()}{extra['texto'][1:]} (intervalos entre entregas acima da vida útil).")
         onde = f"linha {it['linha']}" if it["linha"] else "ficha inteira"
         linhas.append(f"  [{it['gravidade'].upper()}] {it['titulo']} ({onde}): {it['evidencia']}.")
         linhas.append(f"    {it['explicacao']}")
