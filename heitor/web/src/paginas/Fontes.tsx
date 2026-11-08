@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { acoes, CONTA_SERVICO, useMundo, useProximaLeitura } from "../api";
+import { acoes, CONTA_SERVICO, SUPORTA, useMundo, useProximaLeitura } from "../api";
 import { Botao, Cartao } from "../componentes/base";
 import { Pagina } from "../componentes/Pagina";
 import { Selo } from "../componentes/Selos";
@@ -146,11 +146,13 @@ function FonteConectada({ fonte, lendo }: { fonte: Fonte; lendo: boolean }) {
               {lendo ? "lendo agora" : "conectada"}
             </span>
           </div>
-          <p className="mt-1 break-all font-mono text-xs text-fraco">{fonte.url}</p>
+          {fonte.url && <p className="mt-1 break-all font-mono text-xs text-fraco">{fonte.url}</p>}
         </div>
-        <Botao variante="fantasma" onClick={acoes.desconectarFonte}>
-          Desconectar
-        </Botao>
+        {SUPORTA.desconectarFonte && (
+          <Botao variante="fantasma" onClick={acoes.desconectarFonte}>
+            Desconectar
+          </Botao>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">

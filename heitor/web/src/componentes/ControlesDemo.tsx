@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { acoes, useMundo } from "../api";
+import { acoes, MODO, SUPORTA, useMundo } from "../api";
 import { useEstado } from "../estado";
 import { IconeFechar } from "../util";
 import { Botao } from "./base";
@@ -17,9 +17,16 @@ export function PainelDemo() {
         <Botao variante="primario" disabled={rodando || semFonte} onClick={acoes.lerAgora}>
           Ler planilha agora
         </Botao>
-        <Botao disabled={rodando || semFonte} onClick={() => acoes.avancarRelogio(7)}>
-          Avançar o relógio 7 dias
-        </Botao>
+        {SUPORTA.avancarRelogio && (
+          <Botao disabled={rodando || semFonte} onClick={() => acoes.avancarRelogio(7)}>
+            Avançar o relógio 7 dias
+          </Botao>
+        )}
+        {SUPORTA.rodarExemplo && (
+          <Botao disabled={rodando} onClick={() => void acoes.rodarExemplo()}>
+            Auditar fichas de exemplo
+          </Botao>
+        )}
         <Botao variante="fantasma" onClick={acoes.resetarDemo}>
           Resetar demo
         </Botao>
@@ -28,7 +35,7 @@ export function PainelDemo() {
         </Botao>
       </div>
       <p className={"text-caption tabular-nums text-fraco"}>
-        {rodando ? "execução em andamento" : "agente parado"} · relógio {dias > 0 ? `+${dias} dias` : "normal"} · leituras
+        {MODO === "api" ? "dados da API" : "simulação"} · {rodando ? "execução em andamento" : "agente parado"} · relógio {dias > 0 ? `+${dias} dias` : "normal"} · leituras
         desde o reset: {mundo.leituras}
       </p>
     </div>
