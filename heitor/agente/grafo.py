@@ -218,7 +218,10 @@ class Execucao:
         if pensamento:
             self._emitir("decisao", None, {"escolheu": ferramenta, "args": entrada}, {"pensamento": pensamento}, custo)
             custo = 0.0  # o custo do LLM fica na decisão
-        tipo = "erro" if ferramenta in EVENTOS_DE_ERRO else "ferramenta"
+        # Ferramenta que falhou (virou pendência de revisão) é ERRO no log, não "rodou": quem lê o log (a
+        # conciliação do vigia) não pode tratar uma regra que não conferiu nada como se tivesse conferido.
+        falhou = isinstance(saida, dict) and "pendencia_de_revisao" in saida
+        tipo = "erro" if ferramenta in EVENTOS_DE_ERRO or falhou else "ferramenta"
         self._emitir(tipo, ferramenta, entrada, saida, custo)
 
     def _emitir(self, tipo: str, ferramenta: str | None, entrada: dict, saida: Any, custo: float) -> None:
@@ -250,7 +253,8 @@ def politica_deterministica(exe: Execucao) -> dict[str, Any]:
     assert ctx is not None
     if ctx.funcionario_id not in exe.consultou_exigencia:
         return {"ferramenta": "exigencia_funcao", "args": {}, "pensamento": "ver o que a função exige"}
-    if set(ctx.linhas) - ctx.linhas_auditadas or not ctx.funcionario_auditado:
+    falhou = f"rev-{ctx.funcionario_id}" in ctx.achados  # as regras falharam: já há pendência de revisão
+    if (set(ctx.linhas) - ctx.linhas_auditadas or not ctx.funcionario_auditado) and not falhou:
         return {"ferramenta": "auditar_ficha", "args": {}, "pensamento": "auditar o histórico inteiro da ficha"}
     if ctx.foto and not ctx.papel_conferido:
         return {"ferramenta": "conferir_ficha_de_papel", "args": {},
