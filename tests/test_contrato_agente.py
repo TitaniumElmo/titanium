@@ -18,6 +18,10 @@ from heitor.agente.grafo import reauditar, rodar_auditoria  # noqa: E402
 from heitor.agente.tipos import REGRAS_PROPOSTAS  # noqa: E402
 from heitor.contrato import Achado, Evento, Linha, Pendencia  # noqa: E402
 
+import pytest  # noqa: E402
+
+from heitor.agente.conferencia_ca import base_disponivel  # noqa: E402
+
 FUNCOES_DE_DADOS = ("consulta_ca", "buscar_ca_proximo", "exigencia_funcao", "categoria_epi",
                     "audita_linha", "audita_funcionario", "calcula_exposicao")
 
@@ -79,6 +83,7 @@ def test_falha_repetida_gera_uma_pendencia_de_revisao():
     assert len(revisoes) == len(funcionarios), [p["achado_id"] for p in revisoes]
 
 
+@pytest.mark.skipif(not base_disponivel(), reason="base CAEPI não está em dados/ (RelatorioCA_*.csv)")
 def test_cas_em_duvida_viram_uma_conferencia_por_ficha():
     """CA lido que não confere com o EPI: nunca é trocado; vira UMA conferência no papel, com a hipótese da empresa."""
     def l(fid, n, epi, ca):
@@ -219,3 +224,23 @@ if __name__ == "__main__":
         if nome.startswith("test_"):
             fn()
             print("ok ", nome)
+
+
+def test_paralelo_da_o_mesmo_resultado_e_nao_compartilha_achados(monkeypatch):
+    """Funcionários em paralelo não podem dividir o dicionário de achados: uma ferramenta percorre os
+    achados enquanto outra thread acrescenta, e a auditoria inteira caía com "dictionary changed size
+    during iteration" (reproduzido com 8 em paralelo: 19 de 44 auditorias)."""
+    from heitor.agente.grafo import Execucao
+
+    linhas = [{**{c: v for c, v in l.items() if c != "linha"}, "funcionario_id": f"{k:02d}{l['funcionario_id']}"}
+              for k in range(12) for l in LINHAS]
+    exe = Execucao("au-x", linhas, None)
+    assert exe.episodio().achados is not exe.achados
+
+    chave = lambda r: sorted((a["funcionario_id"], a["regra"], a["evidencia"]) for a in r["achados"])  # noqa: E731
+    with stubs_de_dados():
+        monkeypatch.setenv("HEITOR_PARALELO", "1")
+        sequencial = rodar_auditoria("au-seq", [dict(l) for l in linhas])
+        monkeypatch.setenv("HEITOR_PARALELO", "6")
+        for i in range(3):
+            assert chave(rodar_auditoria(f"au-par-{i}", [dict(l) for l in linhas])) == chave(sequencial)

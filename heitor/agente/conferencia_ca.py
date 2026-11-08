@@ -49,7 +49,26 @@ def familia(texto: str | None) -> str | None:
 
 @lru_cache(maxsize=1)
 def _indice() -> dict[str, str]:
-    """número do CA -> equipamento (coluna 8 da base CAEPI)."""
+    """número do CA -> equipamento.
+
+    Usa a base oficial do time, a mesma das regras (heitor.dados.caepi: dados/RelatorioCA_*.csv). O export
+    antigo (tgg_export_caepi.txt, separado por "|") só é lido se HEITOR_CAEPI apontar para ele: antes ele
+    era o padrão e, em qualquer máquina sem esse arquivo (inclusive o deploy), a conferência se desligava
+    em silêncio.
+    """
+    if os.getenv("HEITOR_CAEPI"):
+        return _indice_export_antigo()
+    try:
+        from heitor.dados.caepi import base_padrao
+
+        grupos = base_padrao()["grupos"]
+    except (FileNotFoundError, ImportError):
+        return {}
+    return {ca.strip().lstrip("0"): linhas[0]["EQUIPAMENTO"].strip() for ca, linhas in grupos.items() if ca.strip()}
+
+
+def _indice_export_antigo() -> dict[str, str]:
+    """Export antigo da base (coluna 8 = equipamento)."""
     indice: dict[str, str] = {}
     if not CAMINHO_CAEPI.exists():
         return indice
