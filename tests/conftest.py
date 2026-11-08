@@ -18,6 +18,18 @@ from heitor.api.estado import estado  # noqa: E402
 from heitor.api.main import app  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _sem_email_de_verdade(monkeypatch):
+    """Nenhum teste fala com um servidor de e-mail real, aconteça o que acontecer com o ambiente."""
+    import smtplib
+
+    def recusar(*_a, **_k):
+        raise RuntimeError("teste não envia e-mail de verdade")
+
+    monkeypatch.setattr(smtplib, "SMTP", recusar)
+    monkeypatch.setattr(smtplib, "SMTP_SSL", recusar)
+
+
 @pytest.fixture
 def client():
     estado.limpar()

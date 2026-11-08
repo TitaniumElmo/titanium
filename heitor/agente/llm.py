@@ -20,8 +20,12 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-# override=True: o .env do projeto vence variáveis antigas exportadas no shell.
-load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
+# Sem override: o que já está definido vence o .env. Com override=True, o .env atropelava as
+# variáveis que os testes esvaziam de propósito (SMTP_HOST, destinatários, Drive), e rodar o
+# pytest numa máquina com e-mail configurado mandava e-mails de verdade. Também no deploy, a
+# configuração da plataforma tem de vencer um .env esquecido. Variável velha exportada no
+# shell: `unset NOME` antes de rodar.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 BASE_URL = "https://api.featherless.ai/v1"
 MODELO_PADRAO = "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
