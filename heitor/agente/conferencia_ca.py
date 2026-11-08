@@ -10,12 +10,14 @@ confiança e com sugestões, e a auditoria pede confirmação ao RH.
 
 from __future__ import annotations
 
+import logging
 import os
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+_log = logging.getLogger("heitor.conferencia_ca")
 CAMINHO_CAEPI = Path(os.getenv("HEITOR_CAEPI", Path(__file__).resolve().parents[2] / "data" / "tgg_export_caepi.txt"))
 CONF_NAO_CONFERE = 0.4
 
@@ -49,16 +51,32 @@ def familia(texto: str | None) -> str | None:
 
 @lru_cache(maxsize=1)
 def _indice() -> dict[str, str]:
-    """número do CA -> equipamento (coluna 8 da base CAEPI)."""
-    indice: dict[str, str] = {}
-    if not CAMINHO_CAEPI.exists():
-        return indice
-    with CAMINHO_CAEPI.open(encoding="utf-8", errors="replace") as f:
-        next(f, None)
-        for linha in f:
-            p = linha.split("|", 8)
-            if len(p) > 7 and p[0].strip():
-                indice.setdefault(p[0].strip().lstrip("0"), p[7].strip())
+    """número do CA -> equipamento.
+
+    Fonte oficial do time: a base RelatorioCA em dados/, pelo carregador do Gustavo (heitor.dados.caepi).
+    Plano B: o export antigo (data/tgg_export_caepi.txt). Sem nenhuma das duas, a checagem CA × EPI
+    fica desligada E avisa no log (antes ficava desligada em silêncio).
+    """
+    try:
+        from heitor.dados.caepi import base_padrao
+
+        grupos = base_padrao()["grupos"]
+        indice = {str(ca).strip().lstrip("0"): str(regs[0].get("EQUIPAMENTO", "")).strip()
+                  for ca, regs in grupos.items() if str(ca).strip() and regs}
+        if indice:
+            return indice
+    except Exception as e:  # noqa: BLE001 — módulo ou base ausente: tenta o plano B
+        _log.info("base CAEPI do Gustavo indisponível (%s); tentando o export antigo", type(e).__name__)
+    indice = {}
+    if CAMINHO_CAEPI.exists():
+        with CAMINHO_CAEPI.open(encoding="utf-8", errors="replace") as f:
+            next(f, None)
+            for linha in f:
+                p = linha.split("|", 8)
+                if len(p) > 7 and p[0].strip():
+                    indice.setdefault(p[0].strip().lstrip("0"), p[7].strip())
+    if not indice:
+        _log.warning("sem base CAEPI (dados/RelatorioCA_*.csv): a checagem CA × EPI está DESLIGADA")
     return indice
 
 
