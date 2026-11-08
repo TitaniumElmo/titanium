@@ -249,7 +249,8 @@ def reauditar(pendencia_id: str, linhas: list[Linha], emitir_evento: Optional[Ca
     achado = estado.obter_achado(p.achado_id, p.auditoria_id)
 
     if not linhas and p.destino == "rh":
-        fechar_pendencia(p, True, "documento recebido (stub: conteúdo não conferido)")
+        # Como o agente real: documento sem entregas do funcionário (nota fiscal, lista de presença)
+        # não fecha nem reabre sozinho; a pendência fica "aguardando" a conferência de uma pessoa.
         return []
 
     do_funcionario = [l for l in linhas if l.funcionario_id == achado.funcionario_id]

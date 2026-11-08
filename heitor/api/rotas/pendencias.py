@@ -52,7 +52,7 @@ async def responder(
     if p.status not in ("aberta", "reaberta"):
         raise HTTPException(409, f"pendência está '{p.status}'; só aceita resposta quando aberta ou reaberta")
 
-    caminho = await salvar_upload(arquivo, p.auditoria_id or "sem-auditoria", "respostas", pendencia_id)
+    caminho = await salvar_upload(arquivo, p.auditoria_id or "sem-auditoria", "respostas", pendencia_id, aceitar_pdf=True)
     try:
         p = await run_in_threadpool(execucao.executar_reauditoria, pendencia_id, str(caminho), nota)
     except TransicaoInvalida as exc:  # outra resposta chegou ao mesmo tempo

@@ -35,9 +35,26 @@ class _JaCobrada(Exception):
     pass
 
 
+def _ler_prazo_teste() -> tuple[int, Optional[str]]:
+    """Única leitura de HEITOR_PRAZO_TESTE: (dias, valor inválido ou None). Nunca lança exceção."""
+    valor = os.getenv("HEITOR_PRAZO_TESTE", "").strip()
+    if not valor:
+        return 0, None
+    if valor.lstrip("-").isdigit():
+        try:
+            return int(valor), None
+        except ValueError:
+            pass
+    return 0, valor
+
+
+def dias_adiantados() -> int:
+    """N de HEITOR_PRAZO_TESTE (positivo adianta, negativo atrasa o relógio); 0 se ausente ou inválido."""
+    return _ler_prazo_teste()[0]
+
+
 def hoje() -> date:
-    adiantar = os.getenv("HEITOR_PRAZO_TESTE", "").strip()
-    return date.today() + timedelta(days=int(adiantar)) if adiantar.lstrip("-").isdigit() else date.today()
+    return date.today() + timedelta(days=dias_adiantados())
 
 
 def _cobrada_em(p: Pendencia) -> Optional[date]:
@@ -55,7 +72,19 @@ def _vencida(p: Pendencia, dia: date) -> bool:
 LOTE = "cobranca"  # as cobranças de uma rodada saem num e-mail por destinatário
 
 
+def avisar_prazo_teste() -> int:
+    n, invalido = _ler_prazo_teste()
+    if invalido is not None:
+        log.warning("HEITOR_PRAZO_TESTE inválida (%r), ignorada", invalido)
+    if n:
+        log.warning("ATENÇÃO: HEITOR_PRAZO_TESTE=%d ligada, o relógio da cobrança está %s %d dias; "
+                    "não usar na demo", n, "adiantado" if n > 0 else "atrasado", abs(n))
+    return n
+
+
 def cobrar_atrasadas(dia: Optional[date] = None) -> list[dict]:
+    if dia is None:
+        avisar_prazo_teste()
     with agrupar(LOTE):
         return _cobrar(dia or hoje())
 

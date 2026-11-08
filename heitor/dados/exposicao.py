@@ -37,13 +37,19 @@ def _meses_entre(inicio, hoje):
     return max(meses, 0)
 
 
-def _meses_da_troca_passado(achado):
-    """Tempo além da vida útil, em meses (sem arredondar); None se a evidência não puder ser lida."""
+def dias_alem_da_vida_util(achado):
+    """Dias do intervalo acima da vida útil, lidos da evidência do troca_passado; None se ilegível."""
     m = _PADRAO_TROCA.search(str(achado.get("evidencia") or ""))
     if not m:
         return None
     dias, vida = int(m.group(1)), int(m.group(2))
-    return max(0, dias - vida) / DIAS_POR_MES
+    return max(0, dias - vida)
+
+
+def _meses_da_troca_passado(achado):
+    """Tempo além da vida útil, em meses (sem arredondar); None se a evidência não puder ser lida."""
+    dias = dias_alem_da_vida_util(achado)
+    return None if dias is None else dias / DIAS_POR_MES
 
 
 def _grau_da_funcao(funcao):

@@ -110,7 +110,8 @@ def test_rh_envia_nota_fiscal(client, tmp_path):
     assert p["destino"] == "rh"
     nf = tmp_path / "nota_fiscal.pdf"
     nf.write_bytes(b"%PDF-1.4 falso")
-    assert responder(client, p["id"], nf).json()["status"] == "fechada"
+    # Documento sem entregas do funcionário: fica aguardando uma pessoa conferir (como o agente real).
+    assert responder(client, p["id"], nf).json()["status"] == "aguardando"
 
 
 def test_upload_de_csv_proprio(client):
