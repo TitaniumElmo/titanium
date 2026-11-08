@@ -12,7 +12,6 @@ from __future__ import annotations
 import importlib
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -89,7 +88,6 @@ class Contexto:
     fora_da_planilha: list[dict[str, Any]] = field(default_factory=list)  # linhas do papel sem entrega na planilha
     foto: str | None = None  # foto da ficha de papel deste funcionário, se houver
     papel_conferido: bool = False
-    aso_auditado: bool = False  # exames médicos (ASO), só com HEITOR_EXAMES=1
     empresa: list[dict[str, Any]] = field(default_factory=list)  # todas as entregas da auditoria (só leitura)
 
     def achados_do_funcionario(self) -> list[Achado]:
@@ -557,46 +555,6 @@ def _sugere_fraude(texto: str, hoje: date | None = None) -> bool:
     return False
 
 
-# --------------------------------------------- exames médicos (ASO), opcional ---
-# Regras do Gustavo (heitor/dados/aso.py). Desligado por padrão: sem HEITOR_EXAMES=1, a ferramenta nem é
-# registrada e o agente fica exatamente como antes. O arquivo vem de HEITOR_ASO_CSV.
-ASO_CSV_PADRAO = "heitor/exemplos/aso_exemplo.csv"
-_cache_aso: dict[tuple[str, str], list[Achado]] = {}
-
-
-def aso_ligado() -> bool:
-    try:
-        from heitor.dados.aso import exames_ligado
-    except ImportError:
-        return False
-    return exames_ligado()
-
-
-def _achados_aso(hoje: date | None = None) -> list[Achado]:
-    """Achados de ASO da empresa inteira (lidos uma vez por arquivo e dia)."""
-    from heitor.dados.aso import audita_aso_csv
-
-    caminho = os.getenv("HEITOR_ASO_CSV") or ASO_CSV_PADRAO
-    hoje = hoje or date.today()
-    chave = (caminho, hoje.isoformat())
-    if chave not in _cache_aso:
-        _cache_aso[chave] = audita_aso_csv(caminho, hoje)
-    return _cache_aso[chave]
-
-
-def _t_auditar_aso(ctx: Contexto, args: dict) -> Resultado:
-    """Exames médicos (ASO) do funcionário: ausente, periódico vencido, sem médico ou assinatura, admissional
-    tardio, inapto em atividade. Regras do Gustavo; o agente só registra e cobra."""
-    ctx.aso_auditado = True
-    meus = [dict(a) for a in _achados_aso() if str(a.get("funcionario_id")) == ctx.funcionario_id]
-    if not meus:
-        return Resultado({"info": "nenhum problema de ASO para este funcionário (ou ele não está no arquivo de ASO)"})
-    for a in meus:
-        a["id"] = f"{a['id']}-{ctx.funcionario_id}"  # ids únicos mesmo com várias auditorias
-    registrados = _registrar(ctx, meus)
-    return Resultado({"achados_aso": [_resumo_achado(a) for a in registrados]})
-
-
 def _t_terminei(ctx: Contexto, args: dict) -> Resultado:
     return Resultado({"resumo": str(args.get("resumo", ""))[:500]}, terminou=True)
 
@@ -640,9 +598,6 @@ FERRAMENTAS: dict[str, Ferramenta] = {f.nome: f for f in [
     Ferramenta("criar_pendencia", "criar_pendencia(achado_id: str, acao: str, prazo_dias: int)",
                "Cria a pendência de um achado (o destino técnico/RH é definido pelo tipo).", _t_criar_pendencia),
     Ferramenta("terminei", "terminei(resumo: str)", "Encerra a auditoria deste funcionário.", _t_terminei),
-    *([Ferramenta("auditar_aso", "auditar_aso()",
-                  "Exames médicos (ASO, NR-7) do funcionário: ausente, periódico vencido, sem médico ou assinatura, "
-                  "admissional tardio, inapto em atividade.", _t_auditar_aso)] if aso_ligado() else []),
 ]}
 
 
