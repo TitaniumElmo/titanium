@@ -100,7 +100,12 @@ Se o documento pedido ao RH não existir, o achado vira pendência ou passivo.
 | Validade do CA | Ver abaixo | prova | Pedir nota fiscal ao RH |
 | EPI adequado à função | EPI exigido ausente ou de categoria errada | corrigível | Pendência: entregar o EPI certo |
 | Troca na vida útil | Intervalo entre trocas maior que a vida útil do fabricante | corrigível | Pendência: trocar agora |
-| Treinamento | Sem registro | corrigível ou prova | Pedir lista de presença; se não existir, pendência para treinar |
+| Treinamento | Campo "Treinamento sobre uso do EPI" **em branco** na ficha de papel (só com foto) | **risco**, prova | Pedir ao RH a lista de presença (`treinamento_ausente`) |
+
+### Treinamento (decidido em 08/11)
+- Fonte: o cabeçalho da **ficha de papel** (a planilha não tem treinamento). Pergunta à parte ao modelo de visão (`foto.ler_treinamento`), feita **ao mesmo tempo** que a conferência das assinaturas (não soma tempo).
+- Só o campo que **existe e está em branco** vira achado, e como **risco** (não irregular): campo vazio não prova que faltou treinamento (a lista de presença pode existir) e a leitura pode errar. Formulário sem o campo, campo ilegível ou data lida: nada. A data lida é só informação (2 de 8 com erro de dígito): não há regra sobre ela.
+- Medido em 14 fotos: **3 de 5** campos vazios pegos, **nenhum** preenchido lido como vazio. Os 2 que escapam são fotos giradas.
 
 ### Regra do CA (compra ou entrega) — **critério adotado**
 A Nota Técnica 146/2015 do MTE diz que o CA precisa ser válido na **data da compra**; depois vale a vida útil do produto. O especialista concordou. A ficha normalmente só tem a data de **entrega**. Como a compra sempre acontece antes da entrega:
