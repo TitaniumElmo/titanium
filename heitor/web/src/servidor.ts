@@ -105,6 +105,10 @@ const ouvintes = new Set<() => void>();
 let ligado = false;
 let fonteSse: EventSource | null = null;
 let notificacaoPendente: number | null = null;
+// Ao conectar, o SSE manda o log inteiro de uma vez. Aviso de edição que chega nessa primeira
+// leva é história, não edição acontecendo agora: não acende a faixa "conferindo".
+const HISTORICO_SSE_MS = 2500;
+let sseAbertoEm = 0;
 
 export function agora(): number {
   return Date.now();
@@ -221,6 +225,7 @@ function esquecerTudo() {
 function abrirSse() {
   fonteSse?.close();
   cache.eventos = {};
+  sseAbertoEm = Date.now();
   const es = new EventSource(`${BASE}/eventos`);
   es.addEventListener("evento", (msg) => {
     try {
@@ -239,7 +244,7 @@ function receberEvento(bruto: EventoApi) {
       : { resumo: String(bruto.saida ?? "") }; // ex.: passo 0 manda texto ("disparado por: …")
   const ev: Evento = { ...bruto, saida };
 
-  if (ev.ferramenta === "edicao_detectada") {
+  if (ev.ferramenta === "edicao_detectada" && Date.now() - sseAbertoEm > HISTORICO_SSE_MS) {
     const arquivo = String((ev.entrada as { arquivo?: unknown }).arquivo ?? "planilha");
     cache.edicao = { ts: ev.ts, descricao: arquivo, visto_em: Date.now() };
   }

@@ -1,0 +1,17 @@
+server {
+    listen ${PORT};
+    root /usr/share/nginx/html;
+
+    # Rotas da tela (/pendencias, /funcionarios/0302...) caem no index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # index.html sem cache (cada deploy aparece na hora); arquivos com hash, cache longo
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+}
