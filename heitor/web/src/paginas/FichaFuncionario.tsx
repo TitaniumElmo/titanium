@@ -28,7 +28,7 @@ const PAPEL: Record<StatusPapel, { rotulo: string; dica: string; classe: string 
   },
   nao_localizada: {
     rotulo: "🔍 não está no papel",
-    dica: "Está na planilha e não foi localizada na ficha de papel (entrega_sem_ficha)",
+    dica: "Está na planilha e não foi localizada na ficha de papel",
     classe: "border-risco-borda/40 bg-risco-fundo text-risco",
   },
   nao_conferida: { rotulo: "—", dica: "Sem foto da ficha de papel para conferir", classe: "border-transparent text-fraco" },
@@ -152,7 +152,7 @@ export function FichaFuncionario() {
         </p>
         {foraDaPlanilha.length > 0 && (
           <div className="rounded-cartao border border-risco-borda/40 bg-risco-fundo p-4">
-            <h3 className="text-label text-risco">Só na ficha de papel (ficha_sem_planilha)</h3>
+            <h3 className="text-label text-risco">Entregas só na ficha de papel</h3>
             <p className="mt-0.5 text-xs text-apoio">Entregas que estão no papel e não aparecem na planilha. Achado de risco: lançar na planilha se a entrega aconteceu.</p>
             <ul className="mt-2 flex flex-col gap-1">
               {foraDaPlanilha.map((f) => (

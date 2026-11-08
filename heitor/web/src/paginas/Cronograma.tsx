@@ -109,7 +109,9 @@ export function Cronograma() {
         aoMudar={setTipo}
         opcoes={[
           { valor: "todos", rotulo: "Tudo" },
-          ...(Object.keys(ROTULO_TIPO) as TipoCronograma[]).map((t) => ({ valor: t, rotulo: ROTULO_TIPO[t] })),
+          ...(Object.keys(ROTULO_TIPO) as TipoCronograma[])
+            .filter((t) => itens.some((i) => i.tipo === t))
+            .map((t) => ({ valor: t, rotulo: ROTULO_TIPO[t] })),
         ]}
       />
       {filtrados.length === 0 ? (

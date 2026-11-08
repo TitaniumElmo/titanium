@@ -36,11 +36,13 @@ export type Mundo = {
   leituras: number;
   contadores: Record<string, number>;
   extras_pendencia_demo?: string;
+  edicao: { ts: string; descricao: string } | null;
 };
 
 const DIA = 86_400_000;
-const SALARIO_MINIMO = 1518;
+const SALARIO_MINIMO = 1621;
 const INTERVALO_PASSO_MS = 900;
+const ATRASO_DO_VIGIA_MS = 3000;
 
 export const SALARIO_MINIMO_USADO = SALARIO_MINIMO;
 
@@ -157,7 +159,8 @@ function criarMundoInicial(base: number): Mundo {
     linhas.find((l) => l.funcionario_id === id && cond(l))?.linha ?? 0;
   const nBotina0118 = n("0118", (l) => l.data === "2023-03-14");
   const nProtetor0309 = n("0309", (l) => l.data === "2024-01-15");
-  const nLuva0520 = n("0520", (l) => l.data === "2025-06-29");
+  const nProtetor0520 = n("0520", (l) => l.data === "2024-11-06");
+  const nProtetor0410 = n("0410", (l) => l.data === "2024-03-11");
   const nLuva0523 = n("0523", (l) => l.data === "2023-05-03");
   const nLuva0417 = n("0417", (l) => l.data === "2024-05-10");
   const nLuva0302 = n("0302", (l) => l.ca === null);
@@ -186,7 +189,6 @@ function criarMundoInicial(base: number): Mundo {
   });
 
   const t1 = h(6, 7);
-  const t2 = h(5, 10);
   const t3 = h(3, 16);
   const t4 = h(2, 9);
   const t5 = h(1, 8);
@@ -194,12 +196,12 @@ function criarMundoInicial(base: number): Mundo {
 
   const achados: Achado[] = [
     achado("a-1", "0410", "au-1", t1, {
-      linha: 0,
-      regra: "treinamento_ausente",
+      linha: nProtetor0410,
+      regra: "troca_atrasada",
       gravidade: "irregular",
       tipo: "corrigivel",
-      evidencia: "Ficha 0410 sem registro de treinamento no uso do protetor auditivo",
-      acao_sugerida: "pedir lista de presença ao RH; se não existir, treinar",
+      evidencia: `Linha ${nProtetor0410}, protetor auditivo de 11/03/2024 passou da vida útil de 180 dias sem troca registrada`,
+      acao_sugerida: "trocar o protetor auditivo agora",
     }),
     achado("a-2", "0118", "au-1", t1, {
       linha: nBotina0118,
@@ -212,24 +214,24 @@ function criarMundoInicial(base: number): Mundo {
     }),
     achado("a-3", "0309", "au-1", t1, {
       linha: nProtetor0309,
-      regra: "periodo_sem_epi",
+      regra: "troca_passado",
       gravidade: "irregular",
       tipo: "passivo",
-      evidencia: "Sem entrega de protetor auditivo entre 02/2024 e 07/2024",
+      evidencia: "Protetor auditivo passou da vida útil entre 07/2024 e 08/2024, antes da troca seguinte",
       acao_sugerida: "registrar no relatório como exposição potencial",
       exposicao: exposicao(6),
     }),
     achado("a-4", "0520", "au-4", t4, {
-      linha: nLuva0520,
-      regra: "troca_vida_util",
+      linha: nProtetor0520,
+      regra: "troca_atrasada",
       gravidade: "irregular",
       tipo: "corrigivel",
-      evidencia: `Linha ${nLuva0520}, luva de raspa trocada após 120 dias; vida útil do fabricante: 60 dias`,
-      acao_sugerida: "trocar a luva agora",
+      evidencia: `Linha ${nProtetor0520}, protetor auditivo trocado após 240 dias; vida útil do fabricante: 180 dias`,
+      acao_sugerida: "trocar o protetor auditivo agora",
     }),
     achado("a-5", "0115", "au-4", t4, {
       linha: 0,
-      regra: "epi_ausente",
+      regra: "epi_inadequado",
       gravidade: "irregular",
       tipo: "corrigivel",
       evidencia: "Ficha 0115 sem protetor auditivo desde 03/2024; pedreiro exposto a ruído (betoneira)",
@@ -246,7 +248,7 @@ function criarMundoInicial(base: number): Mundo {
     }),
     achado("a-7", "0417", "au-5", t5, {
       linha: nLuva0417,
-      regra: "ca_vencido_na_entrega",
+      regra: "ca_vencido",
       gravidade: "risco",
       tipo: "prova",
       evidencia: `Linha ${nLuva0417}, luva de raspa CA 21245 entregue em 10/05/2024; CA vencido nessa data`,
@@ -262,7 +264,7 @@ function criarMundoInicial(base: number): Mundo {
     }),
     achado("a-9", "0526", "au-6", t6, {
       linha: nBotina0526,
-      regra: "ca_vencido_na_entrega",
+      regra: "ca_vencido",
       gravidade: "risco",
       tipo: "prova",
       evidencia: `Linha ${nBotina0526}, botina CA 28499 entregue em 18/02/2025; CA vencido desde 02/10/2020`,
@@ -298,42 +300,40 @@ function criarMundoInicial(base: number): Mundo {
       id: "p-1",
       achado_id: "a-1",
       funcionario_id: "0410",
-      nome: pessoa("0410").nome,
+      funcionario_nome: pessoa("0410").nome,
       destino: "tecnico",
-      acao: "treinar Edvaldo no uso do protetor auditivo",
-      motivo: "Sem registro de treinamento; o RH confirmou que a lista de presença não existe",
+      acao: "Trocar o protetor auditivo do Edvaldo e colher a assinatura",
+      motivo: "Protetor auditivo além da vida útil de 180 dias indicada pelo fabricante",
       prazo: prazo(-2),
       status: "fechada",
-      gatilho: "rotina",
+      disparado_por: "rotina",
       cobrancas: 0,
       escalada: false,
       prioridade: "normal",
       historico: [
-        hist("encontrar", "agente", t1, "audita_linha: treinamento exigido para carpinteiro, sem registro"),
-        hist("buscar_prova", "rh", t1 + 60_000, "Pedida ao RH a lista de presença do treinamento"),
-        hist("buscar_prova", "rh", t2, "RH respondeu: a lista de presença não existe"),
-        hist("pedir_correcao", "agente", t2 + 60_000, "Pendência enviada ao técnico por e-mail"),
-        hist("corrigir", "tecnico", t3 - 3 * 3_600_000, "Treinamento aplicado na obra"),
-        hist("comprovar", "tecnico", t3 - 3_600_000, "Lista de presença registrada na planilha"),
-        hist("conferir", "agente", t3, "Reauditoria: registro de treinamento confere. Pendência fechada"),
+        hist("encontrar", "agente", t1, "auditar_ficha: protetor auditivo além da vida útil de 180 dias"),
+        hist("pedir_correcao", "agente", t1 + 60_000, "Pendência enviada ao técnico por e-mail"),
+        hist("corrigir", "tecnico", t3 - 3 * 3_600_000, "Protetor auditivo novo entregue na obra"),
+        hist("comprovar", "tecnico", t3 - 3_600_000, "Entrega registrada na planilha, com assinatura"),
+        hist("conferir", "agente", t3, "Reauditoria: troca do protetor confere. Pendência fechada"),
       ],
     },
     {
       id: "p-2",
       achado_id: "a-4",
       funcionario_id: "0520",
-      nome: pessoa("0520").nome,
+      funcionario_nome: pessoa("0520").nome,
       destino: "tecnico",
-      acao: "trocar a luva de raspa do Wellington e colher assinatura",
+      acao: "Trocar o protetor auditivo do Wellington e colher a assinatura",
       motivo: "Intervalo entre trocas maior que a vida útil indicada pelo fabricante",
       prazo: prazo(-1),
       status: "reaberta",
-      gatilho: "alteracao_planilha",
+      disparado_por: "alteracao_planilha",
       cobrancas: 1,
       escalada: false,
       prioridade: "normal",
       historico: [
-        hist("encontrar", "agente", t4, "audita_linha: troca após 120 dias; vida útil de 60 dias"),
+        hist("encontrar", "agente", t4, "auditar_ficha: protetor trocado após 240 dias; vida útil de 180 dias"),
         hist("pedir_correcao", "agente", t4 + 60_000, "Pendência enviada ao técnico por e-mail"),
         hist("corrigir", "tecnico", t5 - 4 * 3_600_000, "Troca registrada na planilha"),
         hist("comprovar", "tecnico", t5 - 4 * 3_600_000 + 60_000, "Linha nova na ficha 0520"),
@@ -345,13 +345,13 @@ function criarMundoInicial(base: number): Mundo {
       id: "p-3",
       achado_id: "a-5",
       funcionario_id: "0115",
-      nome: pessoa("0115").nome,
+      funcionario_nome: pessoa("0115").nome,
       destino: "tecnico",
       acao: "Entregar protetor auditivo ao João e colher a assinatura: ele opera a betoneira sem proteção auditiva registrada desde 03/2024.",
       motivo: "Pedreiro exposto a ruído sem protetor auditivo na ficha desde 03/2024",
       prazo: prazo(1),
       status: "aberta",
-      gatilho: "alteracao_planilha",
+      disparado_por: "alteracao_planilha",
       cobrancas: 0,
       escalada: false,
       prioridade: "alta",
@@ -364,13 +364,13 @@ function criarMundoInicial(base: number): Mundo {
       id: "p-4",
       achado_id: "a-7",
       funcionario_id: "0417",
-      nome: pessoa("0417").nome,
+      funcionario_nome: pessoa("0417").nome,
       destino: "rh",
       acao: "enviar a nota fiscal da compra da luva CA 21245",
       motivo: "Critério: CA válido na data da entrega. Vencido nessa data; a nota fiscal pode provar a compra antes",
       prazo: prazo(4),
       status: "aguardando",
-      gatilho: "alteracao_planilha",
+      disparado_por: "alteracao_planilha",
       cobrancas: 0,
       escalada: false,
       prioridade: "normal",
@@ -383,13 +383,13 @@ function criarMundoInicial(base: number): Mundo {
       id: "p-5",
       achado_id: "a-9",
       funcionario_id: "0526",
-      nome: pessoa("0526").nome,
+      funcionario_nome: pessoa("0526").nome,
       destino: "rh",
       acao: "enviar a nota fiscal da compra da botina CA 28499",
       motivo: "CA vencido desde 02/10/2020 e entrega em 2025; sem nota fiscal vira irregular",
       prazo: prazo(5),
       status: "aberta",
-      gatilho: "nova_base_caepi",
+      disparado_por: "nova_base_caepi",
       cobrancas: 0,
       escalada: false,
       prioridade: "normal",
@@ -402,13 +402,13 @@ function criarMundoInicial(base: number): Mundo {
       id: "p-6",
       achado_id: "a-10",
       funcionario_id: "0526",
-      nome: pessoa("0526").nome,
+      funcionario_nome: pessoa("0526").nome,
       destino: "tecnico",
       acao: `Conferir na ficha física do Damião: linha ${nBotina0526}: entrega da botina (18/02/2025) não localizada no papel; linha 5: assinatura em dúvida, compare com o nome do funcionário.`,
       motivo: "A planilha tem entregas que a foto da ficha de papel não confirmou",
       prazo: prazo(2),
       status: "aberta",
-      gatilho: "rotina",
+      disparado_por: "rotina",
       cobrancas: 0,
       escalada: false,
       prioridade: "normal",
@@ -422,8 +422,8 @@ function criarMundoInicial(base: number): Mundo {
   const auditoria = (
     id: string,
     inicio: number,
-    gatilho: Gatilho,
-    gatilho_detalhe: string,
+    disparado_por: Gatilho,
+    descricao_disparo: string,
     contagem: Auditoria["contagem"],
     exposicao_total: number,
     fichas = 1,
@@ -434,9 +434,9 @@ function criarMundoInicial(base: number): Mundo {
     iniciada_em: iso(inicio),
     contagem,
     exposicao_total,
-    gatilho,
-    gatilho_detalhe,
-    fichas,
+    disparado_por,
+    descricao_disparo,
+    n_fichas: fichas,
     modo: "llm",
   });
 
@@ -448,7 +448,6 @@ function criarMundoInicial(base: number): Mundo {
     auditoria("au-5", t5, "alteracao_planilha", "1 linha alterada na ficha 0520 e 2 nas fichas 0302 e 0417", { irregular: 0, risco: 2, ok: 1 }, 0, 3),
     auditoria("au-4", t4, "alteracao_planilha", "3 linhas novas nas fichas 0115, 0520 e 0523", { irregular: 3, risco: 0, ok: 4 }, exp4, 3),
     auditoria("au-3", t3, "alteracao_planilha", "1 linha nova na ficha 0410", { irregular: 0, risco: 0, ok: 1 }, 0),
-    auditoria("au-2", t2, "email", "RH respondeu sobre a lista de presença da ficha 0410", { irregular: 0, risco: 0, ok: 0 }, 0),
     auditoria("au-1", t1, "rotina", "auditoria completa das 12 fichas", { irregular: 3, risco: 0, ok: 38 }, exp1, 12),
   ];
   const au5 = auditorias.find((a) => a.id === "au-5");
@@ -463,11 +462,11 @@ function criarMundoInicial(base: number): Mundo {
       { ferramenta: "mapear_colunas", resumo: "9 colunas mapeadas; Visto com confiança 0,64" },
       pensar("Rotina diária: audito as 12 fichas, 3 por vez. Ficha limpa encerra cedo; ficha suspeita eu investigo.", "0121"),
       { ferramenta: "auditar_ficha", resumo: "ficha 0121: 7 linhas, nenhuma lacuna", funcionario: "0121" },
-      { ferramenta: "auditar_ficha", resumo: "ficha 0410: sem registro de treinamento", funcionario: "0410" },
+      { ferramenta: "auditar_ficha", resumo: "ficha 0410: protetor além da vida útil", funcionario: "0410" },
       pensar("Ficha do Antônio limpa: CAs válidos na entrega e EPI certo para a função. Encerro em 2 passos.", "0121"),
       { ferramenta: "auditar_ficha", resumo: "ficha 0526: botina com CA vencido na entrega", funcionario: "0526" },
-      pensar("Treinamento exigido sem registro. Antes de cobrar o técnico, peço a lista de presença ao RH.", "0410"),
-      { ferramenta: "criar_pendencia", entrada: { destino: "rh" }, resumo: "RH: lista de presença da ficha 0410", funcionario: "0410" },
+      pensar("O protetor do Edvaldo passou dos 180 dias. Peço a troca ao técnico, com prazo de 5 dias.", "0410"),
+      { ferramenta: "criar_pendencia", entrada: { destino: "tecnico" }, resumo: "técnico: trocar o protetor do Edvaldo", funcionario: "0410" },
       pensar("Ficha do Damião suspeita: CA vencido desde 2020 e entrega em 2025. Vou investigar.", "0526"),
       { ferramenta: "historico_da_empresa", resumo: "outras fichas com CA 28499: nenhuma", funcionario: "0526" },
       { ferramenta: "consulta_ca", entrada: { numero: "28499" }, resumo: "CA 28499 vencido desde 02/10/2020", funcionario: "0526" },
@@ -479,26 +478,22 @@ function criarMundoInicial(base: number): Mundo {
       { ferramenta: "calcula_exposicao", resumo: "Exposição potencial máxima de 14 meses" },
       { ferramenta: "gerar_relatorio", resumo: "Relatório com 3 achados" },
     ]),
-    "au-2": eventosPassados("au-2", t2, [
-      { ferramenta: "ler_fonte", resumo: "E-mail do RH: lista de presença não existe" },
-      { ferramenta: "criar_pendencia", resumo: "Técnico: treinar Edvaldo, prazo 5 dias" },
-    ]),
     "au-3": eventosPassados("au-3", t3, [
       { ferramenta: "ler_fonte", resumo: "1 linha nova na ficha 0410" },
-      { ferramenta: "extrair_ficha", resumo: "Treinamento registrado em " + isoDia(t3).split("-").reverse().join("/") },
-      { ferramenta: "audita_linha", resumo: "Registro de treinamento confere → ok" },
-      { ferramenta: "fechar_pendencia", resumo: "Correção confere: p-1 fechada" },
+      { ferramenta: "extrair_ficha", resumo: "linha nova: protetor auditivo entregue em " + isoDia(t3).split("-").reverse().join("/") },
+      { ferramenta: "audita_linha", resumo: "troca do protetor confere → ok" },
+      { ferramenta: "fechar_pendencia", resumo: "correção confere: p-1 fechada" },
     ]),
     "au-4": eventosPassados("au-4", t4, [
       { ferramenta: "ler_fonte", resumo: "3 linhas novas em 3 fichas" },
       { ferramenta: "extrair_ficha", resumo: "Fichas 0115, 0520 e 0523 lidas" },
       { ferramenta: "exigencia_funcao", resumo: "Pedreiro: ruído → protetor auditivo" },
       { ferramenta: "audita_linha", resumo: "Ficha 0115 sem protetor auditivo → irregular" },
-      { ferramenta: "audita_linha", resumo: "Luva da ficha 0520 além da vida útil → irregular" },
+      { ferramenta: "audita_linha", resumo: "Protetor da ficha 0520 além da vida útil → irregular" },
       { ferramenta: "audita_linha", resumo: `Linha ${nLuva0523} da ficha 0523 sem assinatura → passivo` },
       { ferramenta: "calcula_exposicao", resumo: "Exposição potencial máxima de 5 meses" },
       { ferramenta: "criar_pendencia", resumo: "Técnico: protetor auditivo para o João" },
-      { ferramenta: "criar_pendencia", resumo: "Técnico: trocar a luva do Wellington" },
+      { ferramenta: "criar_pendencia", resumo: "Técnico: trocar o protetor do Wellington" },
       { ferramenta: "gerar_relatorio", resumo: "Relatório com 3 achados novos" },
     ]),
     "au-5": eventosPassados("au-5", t5, [
@@ -528,7 +523,7 @@ function criarMundoInicial(base: number): Mundo {
     {
       id: "at-6",
       ts: iso(t6),
-      gatilho: "nova_base_caepi",
+      disparado_por: "nova_base_caepi",
       resumo: "CA 28499 vencido na base CAEPI → auditou a ficha do Damião → pediu nota fiscal ao RH; cobrou o técnico pela pendência do Wellington",
       auditoria_id: "au-6",
       pendencias_abertas: ["p-5"],
@@ -537,7 +532,7 @@ function criarMundoInicial(base: number): Mundo {
     {
       id: "at-5",
       ts: iso(t5),
-      gatilho: "alteracao_planilha",
+      disparado_por: "alteracao_planilha",
       resumo: "Detectou 3 linhas alteradas → a troca do Wellington veio sem assinatura e a pendência foi reaberta → pediu nota fiscal ao RH",
       auditoria_id: "au-5",
       pendencias_abertas: ["p-4", "p-2"],
@@ -546,7 +541,7 @@ function criarMundoInicial(base: number): Mundo {
     {
       id: "at-4",
       ts: iso(t4),
-      gatilho: "alteracao_planilha",
+      disparado_por: "alteracao_planilha",
       resumo: "Detectou 3 linhas novas → auditou → abriu 2 pendências para o técnico e registrou 1 passivo",
       auditoria_id: "au-4",
       pendencias_abertas: ["p-3", "p-2"],
@@ -555,26 +550,17 @@ function criarMundoInicial(base: number): Mundo {
     {
       id: "at-3",
       ts: iso(t3),
-      gatilho: "alteracao_planilha",
-      resumo: "Detectou o treinamento do Edvaldo na planilha → conferiu → fechou a pendência",
+      disparado_por: "alteracao_planilha",
+      resumo: "Detectou a troca do protetor do Edvaldo na planilha → conferiu → fechou a pendência",
       auditoria_id: "au-3",
       pendencias_abertas: [],
       pendencias_fechadas: ["p-1"],
     },
     {
-      id: "at-2",
-      ts: iso(t2),
-      gatilho: "email",
-      resumo: "RH respondeu que a lista de presença não existe → pediu ao técnico que treine o Edvaldo",
-      auditoria_id: "au-2",
-      pendencias_abertas: ["p-1"],
-      pendencias_fechadas: [],
-    },
-    {
       id: "at-1",
       ts: iso(t1),
-      gatilho: "rotina",
-      resumo: "Auditou as 12 fichas → 3 irregulares → pediu ao RH a lista de presença do Edvaldo",
+      disparado_por: "rotina",
+      resumo: "Auditou as 12 fichas → 3 irregulares → pediu ao técnico a troca do protetor do Edvaldo",
       auditoria_id: "au-1",
       pendencias_abertas: [],
       pendencias_fechadas: [],
@@ -602,6 +588,7 @@ function criarMundoInicial(base: number): Mundo {
     execucao_atual: null,
     leituras: 0,
     contadores: { a: 11, p: 6, au: 6, at: 6 },
+    edicao: null,
   };
 }
 
@@ -647,7 +634,7 @@ type Contexto = {
 
 type Roteiro = {
   fichas: number;
-  gatilho: Gatilho;
+  disparado_por: Gatilho;
   detalhe: string;
   contagem: Auditoria["contagem"];
   passos: Passo[];
@@ -663,13 +650,13 @@ function iniciarExecucao(roteiro: Roteiro) {
     m.auditorias.unshift({
       id,
       fonte_id: m.fonte?.id ?? "f-1",
-      status: "rodando",
+      status: "processando",
       iniciada_em: iso(agora()),
       contagem: { irregular: 0, risco: 0, ok: 0 },
       exposicao_total: 0,
-      gatilho: roteiro.gatilho,
-      gatilho_detalhe: roteiro.detalhe,
-      fichas: roteiro.fichas,
+      disparado_por: roteiro.disparado_por,
+      descricao_disparo: roteiro.detalhe,
+      n_fichas: roteiro.fichas,
       modo: "llm",
     });
     m.eventos[id] = [];
@@ -714,13 +701,14 @@ function iniciarExecucao(roteiro: Roteiro) {
         m.atividade.unshift({
           id: novoId("at", m),
           ts: iso(agora()),
-          gatilho: roteiro.gatilho,
+          disparado_por: roteiro.disparado_por,
           resumo: roteiro.resumo(contexto),
           auditoria_id: contexto.auditoria_id,
           pendencias_abertas: contexto.abertas,
           pendencias_fechadas: contexto.fechadas,
         });
         m.execucao_atual = null;
+        m.edicao = null;
         if (m.fonte) m.fonte.status = "conectada";
       });
     },
@@ -733,7 +721,7 @@ function roteiroLinhasNovas(): Roteiro {
   const nome = primeiroNome(id);
   return {
     fichas: 1,
-    gatilho: "alteracao_planilha",
+    disparado_por: "alteracao_planilha",
     detalhe: "2 linhas novas na ficha 0302",
     contagem: { irregular: 1, risco: 0, ok: 2 },
     resumo: (ctx) =>
@@ -780,7 +768,7 @@ function roteiroLinhasNovas(): Roteiro {
             nome: pessoa(id).nome,
             funcao: pessoa(id).funcao,
             linha: 0,
-            regra: "epi_ausente",
+            regra: "epi_inadequado",
             gravidade: "irregular",
             tipo: "corrigivel",
             evidencia: "Ficha 0302 sem protetor auditivo; servente exposto a ruído (betoneira)",
@@ -805,13 +793,13 @@ function roteiroLinhasNovas(): Roteiro {
             id: pid,
             achado_id: ctx.extras.achado ?? "",
             funcionario_id: id,
-            nome: pessoa(id).nome,
+            funcionario_nome: pessoa(id).nome,
             destino: "tecnico",
             acao: `Entregar protetor auditivo ao ${nome} e colher a assinatura: ele trabalha na betoneira sem proteção auditiva registrada.`,
             motivo: "Servente exposto a ruído sem protetor auditivo na ficha",
             prazo: isoDia(t + DIA),
             status: "aberta",
-            gatilho: "alteracao_planilha",
+            disparado_por: "alteracao_planilha",
             cobrancas: 0,
             escalada: false,
             prioridade: "alta",
@@ -832,7 +820,7 @@ function roteiroCorrecao(pendencia_id: string | undefined): Roteiro {
   const nome = primeiroNome(id);
   return {
     fichas: 1,
-    gatilho: "alteracao_planilha",
+    disparado_por: "alteracao_planilha",
     detalhe: "1 linha nova na ficha 0302 (correção)",
     contagem: { irregular: 0, risco: 0, ok: 1 },
     resumo: (ctx) =>
@@ -909,7 +897,7 @@ function roteiroPrazos(m: Mundo): Roteiro | null {
   passos.push({ ferramenta: "gerar_relatorio", resumo: `${vencidas.length} prazos vencidos no relatório` });
   return {
     fichas: 0,
-    gatilho: "prazo_vencido",
+    disparado_por: "prazo_vencido",
     detalhe: `${vencidas.length} pendências com prazo vencido`,
     contagem: { irregular: 0, risco: 0, ok: 0 },
     resumo: () =>
@@ -920,7 +908,7 @@ function roteiroPrazos(m: Mundo): Roteiro | null {
 }
 
 function fazerLeitura() {
-  if (!mundo.fonte || mundo.execucao_atual) return;
+  if (!mundo.fonte || mundo.execucao_atual || mundo.edicao) return;
   const proxima = mundo.leituras + 1;
   mudar((m) => {
     m.leituras = proxima;
@@ -929,8 +917,15 @@ function fazerLeitura() {
       m.fonte.proxima_leitura = iso(agora() + m.config.intervalo_leitura_s * 1000);
     }
   });
-  if (proxima === 1) iniciarExecucao(roteiroLinhasNovas());
-  else if (proxima === 2) iniciarExecucao(roteiroCorrecao(mundo.extras_pendencia_demo));
+  const roteiro = proxima === 1 ? roteiroLinhasNovas() : proxima === 2 ? roteiroCorrecao(mundo.extras_pendencia_demo) : null;
+  if (!roteiro) return;
+  const minhaGeracao = geracao;
+  mudar((m) => {
+    m.edicao = { ts: iso(agora()), descricao: roteiro.detalhe };
+  });
+  window.setTimeout(() => {
+    if (geracao === minhaGeracao) iniciarExecucao(roteiro);
+  }, ATRASO_DO_VIGIA_MS);
 }
 
 let relogio: number | null = null;
@@ -968,12 +963,13 @@ export function desconectarFonte() {
     m.execucao_atual = null;
     m.cobrancas_hoje = 0;
     m.leituras = 0;
+    m.edicao = null;
     m.deslocamento_ms = 0;
   });
 }
 
 export function lerAgora() {
-  if (!mundo.fonte || mundo.execucao_atual) return;
+  if (!mundo.fonte || mundo.execucao_atual || mundo.edicao) return;
   fazerLeitura();
 }
 

@@ -1,4 +1,4 @@
-import { CA_FICTICIO_VENCENDO, VIDA_UTIL_DIAS } from "./fichas";
+import { VIDA_UTIL_DIAS } from "./fichas";
 import { isoDia } from "./formato";
 import type { Mundo } from "./mock";
 import type { Achado, Funcionario, Gravidade, ItemCronograma, Linha, Pendencia, Relatorio, TipoAchado } from "./tipos";
@@ -101,91 +101,6 @@ export function cronograma(m: Mundo, hoje: string, de: string, ate: string): Ite
     }
   }
 
-  const usamConcha = m.funcionarios.filter((f) =>
-    m.linhas.some((l) => l.funcionario_id === f.funcionario_id && l.ca === CA_FICTICIO_VENCENDO),
-  );
-  const vencimentoCa = isoDia(paraMs(hoje) + 15 * DIA);
-  if (usamConcha.length && dentro(vencimentoCa)) {
-    itens.push({
-      id: "c-ca",
-      tipo: "ca_vencendo",
-      funcionario_id: null,
-      nome: null,
-      funcao: "armador",
-      titulo: `O CA ${CA_FICTICIO_VENCENDO} vence em 15 dias e ${usamConcha.length} funcionários usam esse protetor`,
-      descricao: "Comprar o próximo lote com CA válido na data da compra",
-      afetados: usamConcha.map((f) => f.nome),
-      data: vencimentoCa,
-      status: "previsto",
-      origem: "agente",
-      pendencia_id: null,
-    });
-  }
-
-  const treinamentoEdvaldo = m.pendencias.find((p) => p.funcionario_id === "0410" && p.status === "fechada");
-  const fixos: Omit<ItemCronograma, "origem">[] = [
-    {
-      id: "c-trein-0302",
-      tipo: "treinamento",
-      funcionario_id: "0302",
-      nome: "Rafael Souza Costa",
-      funcao: "servente",
-      titulo: "Treinamento no uso do protetor auditivo (sem registro)",
-      data: isoDia(paraMs(hoje) + 6 * DIA),
-      status: "previsto",
-      pendencia_id: null,
-    },
-    {
-      id: "c-trein-carp",
-      tipo: "treinamento",
-      funcionario_id: null,
-      nome: null,
-      funcao: "carpinteiro",
-      titulo: "Reciclagem do treinamento de EPI, carpinteiros",
-      data: isoDia(paraMs(hoje) + 20 * DIA),
-      status: "previsto",
-      pendencia_id: null,
-    },
-    {
-      id: "c-dds-serv",
-      tipo: "dds",
-      funcionario_id: null,
-      nome: null,
-      funcao: "servente",
-      titulo: "DDS sugerido: uso do protetor auditivo, serventes",
-      descricao: "Duas fichas de servente com falha de protetor auditivo no mesmo período",
-      data: isoDia(paraMs(hoje) + ((8 - new Date(paraMs(hoje)).getDay()) % 7 || 7) * DIA),
-      status: "previsto",
-      pendencia_id: null,
-    },
-    {
-      id: "c-dds-arm",
-      tipo: "dds",
-      funcionario_id: null,
-      nome: null,
-      funcao: "armador",
-      titulo: "DDS sugerido: troca da luva de raspa no prazo, armadores",
-      data: isoDia(paraMs(hoje) + 9 * DIA),
-      status: "previsto",
-      pendencia_id: null,
-    },
-  ];
-  if (treinamentoEdvaldo) {
-    const conferido = treinamentoEdvaldo.historico.find((h) => h.etapa === "conferir");
-    fixos.push({
-      id: "c-trein-0410",
-      tipo: "treinamento",
-      funcionario_id: "0410",
-      nome: "Edvaldo Pereira Santos",
-      funcao: "carpinteiro",
-      titulo: "Treinamento no uso do protetor auditivo",
-      data: conferido ? isoDia(new Date(conferido.ts)) : hoje,
-      status: "feito",
-      pendencia_id: treinamentoEdvaldo.id,
-    });
-  }
-  for (const item of fixos) if (dentro(item.data)) itens.push({ ...item, origem: "agente" });
-
   for (const p of m.pendencias) {
     if (!dentro(p.prazo)) continue;
     const funcionario = m.funcionarios.find((f) => f.funcionario_id === p.funcionario_id);
@@ -193,7 +108,7 @@ export function cronograma(m: Mundo, hoje: string, de: string, ate: string): Ite
       id: `c-${p.id}`,
       tipo: "prazo_pendencia",
       funcionario_id: p.funcionario_id,
-      nome: p.nome,
+      nome: p.funcionario_nome,
       funcao: funcionario?.funcao ?? null,
       titulo: `Prazo da pendência ${p.id}: ${p.acao}`,
       data: p.prazo,
@@ -244,7 +159,7 @@ export function relatorio(m: Mundo, hoje: string, dias: number): Relatorio {
 
   const concluidas = m.auditorias.filter((a) => a.status === "concluida");
   const eventos = concluidas.flatMap((a) => m.eventos[a.id] ?? []);
-  const fichas = concluidas.reduce((s, a) => s + Math.max(a.fichas, 0), 0);
+  const fichas = concluidas.reduce((s, a) => s + Math.max(a.n_fichas, 0), 0);
   const custo = eventos.reduce((s, e) => s + e.custo_usd, 0);
 
   return {

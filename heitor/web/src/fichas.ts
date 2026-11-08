@@ -4,15 +4,8 @@ import type { Linha } from "./tipos";
 const DIA = 86_400_000;
 
 export const VIDA_UTIL_DIAS: Record<string, number> = {
-  capacete: 730,
-  botina: 180,
-  "óculos de proteção": 180,
-  "luva de raspa": 60,
-  "protetor auditivo": 90,
-  "protetor tipo concha": 180,
+  "protetor auditivo": 180,
 };
-
-export const CA_FICTICIO_VENCENDO = "41562";
 
 type Entrega = { data: string; epi: string; ca: string | null; assinatura: boolean; motivo: string };
 
@@ -43,8 +36,7 @@ export function gerarLinhas(pessoas: Pessoa[], base: number): Linha[] {
     const recente = (dias: number) => isoDia(base - dias * DIA);
     let lista = historicoPadrao();
     lista.push(entrega(recente(100 + idx * 7), "botina", "12844", true, "T"));
-    lista.push(entrega(recente(30 + idx * 5), "protetor auditivo", "17664", true, "T"));
-    if (p.funcao === "armador") lista.push(entrega(recente(165), "protetor tipo concha", CA_FICTICIO_VENCENDO));
+    lista.push(entrega(recente(140 + idx * 3), "protetor auditivo", "17664", true, "T"));
 
     switch (p.funcionario_id) {
       case "0115":
@@ -65,8 +57,7 @@ export function gerarLinhas(pessoas: Pessoa[], base: number): Linha[] {
         lista[3] = entrega("2024-05-10", "luva de raspa", "21245");
         break;
       case "0520":
-        lista[4] = entrega("2025-03-01", "luva de raspa", "21245", true, "T");
-        lista[5] = entrega("2025-06-29", "luva de raspa", "21245", true, "T");
+        lista.push(entrega("2024-11-06", "protetor auditivo", "17664", true, "T"));
         break;
       case "0523":
         lista[3] = entrega("2023-05-03", "luva de raspa", "21245", false);
@@ -105,7 +96,7 @@ export function aplicarConferenciaDePapel(linhas: Linha[]): Linha[] {
     if (!COM_FICHA_DE_PAPEL.has(l.funcionario_id)) return l;
     const conferida: Linha = { ...l, na_ficha: true, confianca: { ...l.confianca, assinatura: l.assinatura ? 0.95 : 0.93 } };
     if (l.funcionario_id === "0526" && l.ca === "28499") return { ...conferida, na_ficha: false, assinatura: null };
-    if (l.funcionario_id === "0520" && l.data === "2025-06-29") return { ...conferida, confianca: { ...conferida.confianca, assinatura: 0.55 } };
+    if (l.funcionario_id === "0520" && l.data === "2024-11-06") return { ...conferida, confianca: { ...conferida.confianca, assinatura: 0.55 } };
     if (l.funcionario_id === "0526" && l.linha === 5) return { ...conferida, confianca: { ...conferida.confianca, assinatura: 0.58 } };
     return conferida;
   });
