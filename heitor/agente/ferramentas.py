@@ -17,6 +17,7 @@ from datetime import date, timedelta
 from typing import Any, Callable
 
 from heitor.agente import stubs
+from heitor.agente.conferencia_datas import para_auditoria
 from heitor.agente.tipos import AchadoDict as Achado, LinhaDict as Linha, PendenciaDict as Pendencia
 
 
@@ -79,6 +80,7 @@ class Contexto:
     funcionario_auditado: bool = False
     revisao: list[str] = field(default_factory=list)  # falhas que viraram pendência de revisão
     auditoria_id: str | None = None
+    fora_da_planilha: list[dict[str, Any]] = field(default_factory=list)  # linhas do papel sem entrega na planilha
 
     def achados_do_funcionario(self) -> list[Achado]:
         return [a for a in self.achados.values() if a.get("funcionario_id") == self.funcionario_id]
@@ -163,12 +165,93 @@ def _t_buscar_ca_proximo(ctx: Contexto, args: dict) -> Resultado:
                       "aviso": "suposição de baixa confiança: nunca gera irregular; vira pedido de confirmação"})
 
 
+GRUPO_CONFERIR_CA = "conferir_ca"
+
+
 def _registrar(ctx: Contexto, achados: list[Achado]) -> list[Achado]:
     for a in achados:
         a.setdefault("funcionario_id", ctx.funcionario_id)
         a.setdefault("auditoria_id", ctx.auditoria_id)
+        _marcar_conferencia_ca(ctx, a)
         ctx.achados[a["id"]] = a
     return achados
+
+
+def _marcar_conferencia_ca(ctx: Contexto, a: Achado) -> None:
+    """Achado de CA numa linha cujo CA não confere com o EPI: vira conferência no papel, agrupada por ficha.
+
+    Pode ser erro de leitura ou erro de registro (falha real do processo); só o papel diz qual.
+    """
+    linha = ctx.linhas.get(a.get("linha")) if a.get("linha") is not None else None
+    if linha and a.get("regra") == "assinatura_ausente" and (linha.get("confianca") or {}).get("assinatura", 1.0) < 0.7:
+        a["grupo"] = GRUPO_CONFERIR_CA  # assinatura em dúvida: conferir no papel, junto com CAs e datas
+        return
+    conf = (linha or {}).get("conferencia_ca")
+    if not linha or not conf or conf.get("confere") is not False or not str(a.get("regra", "")).startswith("ca_"):
+        return
+    a["grupo"] = GRUPO_CONFERIR_CA
+    hip = conf.get("hipotese")
+    if hip and "a empresa usa" not in a.get("evidencia", ""):
+        a["evidencia"] = (f"{a.get('evidencia', '')}; a empresa usa o CA {hip} para este EPI: se na ficha está "
+                          f"escrito {hip}, foi erro de leitura; se está escrito {linha.get('ca')}, o registro está errado")
+
+
+def criar_conferencia(ctx: Contexto) -> Pendencia | None:
+    """UMA pendência por funcionário com tudo o que precisa ser conferido no papel: CAs e datas em dúvida.
+
+    Em cada item: o que foi lido, o provável e por quê. Se o escrito for o provável, foi erro de leitura;
+    se for o lido, é falha do registro (achado real; o registro antigo não é reescrito).
+    """
+    grupo = [a for a in ctx.achados_do_funcionario()
+             if a.get("grupo") == GRUPO_CONFERIR_CA and a["id"] not in ctx.pendencia_por_achado]
+    itens = []
+    for a in sorted(grupo, key=lambda x: x.get("linha") or 0):
+        linha = ctx.linhas.get(a.get("linha")) or {}
+        if a.get("regra") == "assinatura_ausente":
+            if linha.get("assinatura_tipo") == "sem_linha_na_ficha":
+                itens.append(f"linha {a.get('linha')}: entrega de {linha.get('data')} ({linha.get('epi')}) não localizada na ficha")
+            else:
+                texto = linha.get("assinatura_texto")
+                itens.append(f"linha {a.get('linha')}: assinatura em dúvida" + (f" (lido '{texto}')" if texto else ""))
+            continue
+        conf = linha.get("conferencia_ca") or {}
+        if conf.get("hipotese"):
+            detalhe = f"CA lido {linha.get('ca')}, provável {conf['hipotese']}"
+        elif conf.get("equipamento"):
+            detalhe = f"CA {linha.get('ca')} é de {conf['equipamento'].lower()[:30]}, ficha diz '{linha.get('epi')}'"
+        else:
+            detalhe = f"CA lido {linha.get('ca')}, que não existe na base"
+        itens.append(f"linha {a.get('linha')}: {detalhe}")
+    # datas: agrupa linhas com a mesma leitura e a mesma hipótese ("linhas 1-5: data lida ..., provável ...")
+    datas: dict[tuple, list[int]] = {}
+    for n, l in sorted(ctx.linhas.items()):
+        cd = l.get("conferencia_data")
+        if cd:
+            datas.setdefault((cd["lida"], cd.get("hipotese"), cd["motivo"]), []).append(n)
+    for (lida, hip, motivo), ns in datas.items():
+        quais = f"linhas {ns[0]}-{ns[-1]}" if len(ns) > 1 and ns == list(range(ns[0], ns[-1] + 1)) else \
+            ("linha " + ", ".join(map(str, ns)))
+        itens.append(f"{quais}: data lida {lida}" + (f", provável {hip}" if hip else "") + f" ({motivo})")
+    # Linha no papel sem entrega na planilha: depende de leitura aberta (datas frágeis), então só conferência.
+    for x in ctx.fora_da_planilha:
+        itens.append(f"linha no papel sem entrega na planilha: {x.get('data')} {x.get('epi')} (planilha desatualizada?)")
+    if not itens:
+        return None
+    acao = ("conferir na ficha física: " + "; ".join(itens)
+            + ". Se o escrito for diferente do lido, foi erro de leitura; se for igual, o registro está errado e vira achado")
+    if grupo:
+        ancora = grupo[0]
+    else:  # só datas em dúvida: um achado de risco para a pendência existir
+        ancora = {"id": f"leitura-{ctx.funcionario_id}", "funcionario_id": ctx.funcionario_id,
+                  "auditoria_id": ctx.auditoria_id, "linha": None,
+                  "regra": "falha_de_ferramenta",  # PROPOSTA ao Pierre: regra "leitura_incerta"
+                  "gravidade": "risco", "tipo": "corrigivel", "grupo": GRUPO_CONFERIR_CA,
+                  "evidencia": "; ".join(itens)[:300], "acao_sugerida": "conferir na ficha física"}
+        ctx.achados[ancora["id"]] = ancora
+    p = criar_pendencia_validada(ctx, ancora, acao=acao, destino="tecnico", limite=900)
+    for a in grupo[1:]:
+        ctx.pendencia_por_achado[a["id"]] = p["id"]
+    return p
 
 
 def _t_audita_linha(ctx: Contexto, args: dict) -> Resultado:
@@ -179,7 +262,7 @@ def _t_audita_linha(ctx: Contexto, args: dict) -> Resultado:
         return Resultado({"erro": f"linhas válidas: {sorted(ctx.linhas)}"}, ok=False)
     por_linha = {}
     for n in numeros:
-        achados = _registrar(ctx, IMPL["audita_linha"](ctx.linhas[n], ctx.funcao))
+        achados = _registrar(ctx, IMPL["audita_linha"](para_auditoria(ctx.linhas[n]), ctx.funcao))
         ctx.linhas_auditadas.add(n)
         por_linha[n] = [_resumo_achado(a) for a in achados if a.get("gravidade") != "ok"] or "ok"
     saida: dict[str, Any] = {"por_linha": por_linha}
@@ -189,7 +272,7 @@ def _t_audita_linha(ctx: Contexto, args: dict) -> Resultado:
 
 
 def _t_audita_funcionario(ctx: Contexto, args: dict) -> Resultado:
-    achados = _registrar(ctx, IMPL["audita_funcionario"](list(ctx.linhas.values()), ctx.funcao))
+    achados = _registrar(ctx, IMPL["audita_funcionario"]([para_auditoria(l) for l in ctx.linhas.values()], ctx.funcao))
     ctx.funcionario_auditado = True
     return Resultado({"achados": [_resumo_achado(a) for a in achados if a.get("gravidade") != "ok"] or "ok"})
 
@@ -216,6 +299,9 @@ def _t_criar_pendencia(ctx: Contexto, args: dict) -> Resultado:
         return Resultado({"erro": f"achado inexistente; achados deste funcionário: {ids}"}, ok=False)
     if achado.get("gravidade") == "ok":
         return Resultado({"erro": "achado ok não gera pendência"}, ok=False)
+    if achado.get("grupo") == GRUPO_CONFERIR_CA:
+        return Resultado({"erro": "CA a conferir no papel: essas conferências viram UMA pendência por ficha, "
+                                  "criada automaticamente no fim; não crie pendência para este achado"}, ok=False)
     if achado["id"] in ctx.pendencia_por_achado:
         return Resultado({"erro": f"já existe a pendência {ctx.pendencia_por_achado[achado['id']]}"}, ok=False)
     if achado.get("tipo") == "passivo" and achado.get("regra") not in PASSIVO_COM_ACAO:
@@ -225,9 +311,10 @@ def _t_criar_pendencia(ctx: Contexto, args: dict) -> Resultado:
     return Resultado(pendencia)
 
 
-def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, prazo_dias: Any = None) -> Pendencia:
-    destino = DESTINO_POR_TIPO.get(achado.get("tipo", ""), "tecnico")
-    acao = str(acao or achado.get("acao_sugerida") or "revisar o achado").strip()[:300]
+def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, prazo_dias: Any = None,
+                             destino: str | None = None, limite: int = 300) -> Pendencia:
+    destino = destino or DESTINO_POR_TIPO.get(achado.get("tipo", ""), "tecnico")
+    acao = str(acao or achado.get("acao_sugerida") or "revisar o achado").strip()[:limite]
     if _sugere_fraude(acao):
         acao = achado.get("acao_sugerida") or "revisar o achado"
     try:
@@ -303,7 +390,14 @@ def executar(nome: str, args: dict[str, Any], ctx: Contexto) -> Resultado:
 
 
 def _falha_vira_revisao(ctx: Contexto, nome: str, erro: Exception | None) -> Resultado:
-    achado: Achado = {"id": f"rev-{ctx.funcionario_id}-{len(ctx.revisao) + 1}", "funcionario_id": ctx.funcionario_id,
+    # Uma pendência de revisão por funcionário e ferramenta: sem a base CAEPI, cada linha falharia
+    # e o técnico receberia dezenas de avisos iguais sobre a mesma ficha.
+    id_revisao = f"rev-{ctx.funcionario_id}-{nome}"
+    if id_revisao in ctx.achados:
+        evidencia = ctx.achados[id_revisao]["evidencia"]
+        return Resultado({"erro": evidencia, "pendencia_de_revisao": ctx.pendencia_por_achado.get(id_revisao),
+                          "aviso": "falha repetida; a pendência de revisão já existe"}, ok=False)
+    achado: Achado = {"id": id_revisao, "funcionario_id": ctx.funcionario_id,
                       "auditoria_id": ctx.auditoria_id,
                       "linha": None, "regra": "falha_de_ferramenta", "gravidade": "risco", "tipo": "corrigivel",
                       "evidencia": f"{nome} falhou duas vezes: {type(erro).__name__}: {str(erro)[:150]}",

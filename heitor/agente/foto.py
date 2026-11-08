@@ -24,12 +24,17 @@ import re
 from pathlib import Path
 from typing import Any
 
+from heitor.agente.assinatura import EFEITO as EFEITO_ASSINATURA
+from heitor.agente.assinatura import classificar_linhas as classificar_assinaturas
+from heitor.agente.conferencia_ca import aplicar as conferir_ca
+from heitor.agente.conferencia_datas import aplicar as conferir_datas
 from heitor.agente.ferramentas import normalizar_ca, normalizar_data
 from heitor.agente.llm import ClienteLLM, extrair_json
 from heitor.agente.tipos import LinhaDict
 
-MODELO_VISAO = os.getenv("HEITOR_MODELO_VISAO", "Qwen/Qwen3-VL-32B-Instruct")
-MODELO_VISAO_RESERVA = os.getenv("HEITOR_MODELO_VISAO_RESERVA", "google/gemma-3-27b-it")
+# Qwen2.5-VL-72B venceu a comparação de 7 modelos (13 fotos, 102 linhas; fotos_teste/resultados).
+MODELO_VISAO = os.getenv("HEITOR_MODELO_VISAO", "Qwen/Qwen2.5-VL-72B-Instruct")
+MODELO_VISAO_RESERVA = os.getenv("HEITOR_MODELO_VISAO_RESERVA", "Qwen/Qwen3-VL-32B-Instruct")
 LADO_MAX = 1600  # px; maior que isso só deixa a chamada mais lenta
 
 CONF_CONCORDA = 0.95
@@ -48,7 +53,7 @@ assinatura: true se a coluna Assinatura DAQUELA linha tem assinatura ou rubrica,
 Cuidado: a foto pode estar inclinada e uma assinatura pode invadir a linha vizinha.
 
 Responda SOMENTE com JSON:
-{"cabecalho": {"nome": "...", "matricula": "...", "funcao": "..."},
+{"cabecalho": {"nome": "...", "matricula": "...", "funcao": "...", "data_admissao": "DD/MM/AAAA"},
  "linhas": [{"data": "DD/MM/AAAA", "epi": "...", "ca": "...", "qtd": "...", "motivo": "...", "assinatura": true}]}"""
 
 PROMPT_ASSINATURAS = """Liste, de cima para baixo, cada linha de entrega desta ficha de EPI com a data
@@ -110,18 +115,18 @@ def _texto_assinado(valor: Any) -> bool | None:
     return True
 
 
-def _pergunta_b(cliente: ClienteLLM, b64: str, linhas: list[LinhaDict]) -> tuple[list[bool | None], float]:
-    """Lista da coluna Assinatura, alinhada às linhas da leitura A (por posição; por data se a contagem diferir)."""
+def _pergunta_b(cliente: ClienteLLM, b64: str, linhas: list[LinhaDict]) -> tuple[list[str | None], float]:
+    """Texto da coluna Assinatura de cada linha, alinhado à leitura A (por posição; por data se a contagem diferir)."""
     try:
         obj, custo = _perguntar(cliente, b64, PROMPT_ASSINATURAS, 800)
     except Exception:  # noqa: BLE001 — sem resposta B, a confiança cai
         return [None] * len(linhas), 0.0
     lista = [x for x in (obj.get("linhas") or []) if isinstance(x, dict)]
     if len(lista) == len(linhas):
-        return [_texto_assinado(x.get("assinatura")) for x in lista], custo
-    por_data: dict[str | None, list[bool | None]] = {}
+        return [x.get("assinatura") for x in lista], custo
+    por_data: dict[str | None, list[str | None]] = {}
     for x in lista:
-        por_data.setdefault(normalizar_data(x.get("data")), []).append(_texto_assinado(x.get("assinatura")))
+        por_data.setdefault(normalizar_data(x.get("data")), []).append(x.get("assinatura"))
     return [(por_data.get(l.get("data")) or [None]).pop(0) for l in linhas], custo
 
 
@@ -144,12 +149,19 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
     nome, _ = _campo(cab.get("nome"))
     matricula, _ = _campo(cab.get("matricula"))
     funcao, _ = _campo(cab.get("funcao"))
+    admissao_txt, _ = _campo(cab.get("data_admissao"))
+    admissao = normalizar_data(admissao_txt) if admissao_txt else None
     funcionario_id = re.sub(r"\D", "", matricula or "") or (nome or caminho.stem)
 
     linhas: list[LinhaDict] = []
-    for n, item in enumerate(bruto.get("linhas") or [], start=1):
+    n = 0
+    for item in bruto.get("linhas") or []:
         if not isinstance(item, dict):
             continue
+        # Linha fantasma: o modelo às vezes "lê" as linhas vazias da tabela. Sem data, EPI e CA não há entrega.
+        if not any(_campo(item.get(c))[0] for c in ("data", "epi", "ca")):
+            continue
+        n += 1
         conf: dict[str, float] = {}
         data_txt, est = _campo(item.get("data"))
         data = normalizar_data(data_txt) if data_txt else None
@@ -170,11 +182,14 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
             "linha": n, "data": data, "epi": epi or "", "qtd": int(m.group()) if m else 1, "ca": ca,
             "motivo": motivo, "assinatura": _bool(item.get("assinatura")), "confianca": conf,
             "origem": caminho.name,
+            "data_admissao": admissao,  # campo interno (fora do contrato): coerência das datas
         })
 
-    respostas_b, custo_b = _pergunta_b(cliente, b64, linhas)
+    textos_b, custo_b = _pergunta_b(cliente, b64, linhas)
     custo += custo_b
-    for l, b in zip(linhas, respostas_b):
+    tipos = classificar_assinaturas(textos_b, nome)
+    for l, texto_b, tipo in zip(linhas, textos_b, tipos):
+        b = _texto_assinado(texto_b)
         a = l["assinatura"]
         if a is not None and a == b:
             conf_ass = CONF_CONCORDA
@@ -184,10 +199,21 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
         else:
             l["assinatura"] = False  # na dúvida, a falta de assinatura é o que precisa ser conferido
             conf_ass = CONF_DISCORDA
+        # O que está escrito confere com o nome do funcionário? ("entregue", "✓", "Marcos" na ficha do Fábio)
+        if tipo in EFEITO_ASSINATURA:
+            l["assinatura"], conf_ass = EFEITO_ASSINATURA[tipo]
         l["confianca"]["assinatura"] = conf_ass
-        l["leitura_assinatura"] = {"a": a, "b": b}  # rastro (campo interno, fora do contrato)
+        # rastro (campos internos, fora do contrato): o que cada pergunta respondeu e o que o código concluiu
+        l["leitura_assinatura"] = {"a": a, "b": b}
+        l["assinatura_texto"], l["assinatura_tipo"] = texto_b, tipo
 
-    return {"linhas": linhas, "cabecalho": {"nome": nome, "matricula": matricula, "funcao": funcao},
+    # CA que não combina com o EPI fica com baixa confiança. Testado e descartado: perguntar ao modelo
+    # "é 14664 ou 17664?" (ele repete a própria leitura). A hipótese vem dos CAs da empresa, no grafo.
+    conferir_ca(linhas)
+    conferir_datas(linhas)  # entrega antes da admissão ou depois de hoje: data em dúvida, nunca trocada
+
+    return {"linhas": linhas, "cabecalho": {"nome": nome, "matricula": matricula, "funcao": funcao,
+                                            "data_admissao": admissao},
             "custo_usd": round(custo, 6), "modelo": MODELO_VISAO}
 
 

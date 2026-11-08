@@ -29,6 +29,9 @@ from typing import Any, Optional, TypedDict
 from langgraph.graph import END, StateGraph
 
 from heitor.agente import ferramentas as F
+from heitor.agente.conferencia_ca import aplicar as conferir_ca
+from heitor.agente.conferencia_ca import hipoteses_da_empresa
+from heitor.agente.conferencia_datas import aplicar as conferir_datas
 from heitor.agente.llm import ClienteLLM, LLMIndisponivel, extrair_json, llm_ligado
 from heitor.agente.tipos import AchadoDict as Achado, EmitirEvento, LinhaDict as Linha, PendenciaDict as Pendencia
 from heitor.contrato import Evento
@@ -59,6 +62,7 @@ Regras:
 4. Nunca sugira preencher, assinar ou alterar ficha antiga com data passada: isso é fraude.
 5. Campo com confiança < 0.7: use reextrair_campo antes de auditar a linha.
 6. CA não encontrado: use buscar_ca_proximo. Sugestão é suposição, nunca irregularidade.
+   Achado com "grupo": "conferir_ca" vira uma conferência no papel criada automaticamente: não crie pendência para ele.
 7. Você tem no máximo {LIMITE_PASSOS} passos. Quando acabar, chame terminei.
 
 Responda SOMENTE com um objeto JSON, sem texto fora dele:
@@ -70,13 +74,21 @@ Responda SOMENTE com um objeto JSON, sem texto fora dele:
 class Execucao:
     """O que vive fora do estado do grafo: dados, callbacks e o cliente LLM."""
 
-    def __init__(self, auditoria_id: str, linhas: list[Any], emitir: EmitirEvento | None):
+    def __init__(self, auditoria_id: str, linhas: list[Any], emitir: EmitirEvento | None,
+                 fora_da_planilha: dict[str, list[dict]] | None = None):
         self.auditoria_id = auditoria_id
+        self.fora_da_planilha = fora_da_planilha or {}
         self.emitir = emitir or (lambda e: None)
         self.por_funcionario: dict[str, list[Linha]] = defaultdict(list)
+        todas = []
         for i, l in enumerate((_para_dict(x) for x in linhas), start=1):
             l.setdefault("linha", i)
             self.por_funcionario[str(l.get("funcionario_id", "?"))].append(l)
+            todas.append(l)
+        # CA × EPI com todas as fichas juntas: os CAs que a empresa usa viram hipótese para os que não conferem.
+        conferir_ca(todas)
+        hipoteses_da_empresa(todas)
+        conferir_datas(todas)
         self.achados: dict[str, Achado] = {}
         self.pendencias: list[Pendencia] = []
         self.pendencia_por_achado: dict[str, str] = {}
@@ -102,7 +114,7 @@ class Execucao:
             funcionario_id=fid, funcao=str(linhas[0].get("funcao", "")),
             linhas={int(l["linha"]): l for l in linhas}, achados=self.achados, pendencias=self.pendencias,
             pendencia_por_achado=self.pendencia_por_achado, revisao=self.revisao,
-            auditoria_id=self.auditoria_id,
+            auditoria_id=self.auditoria_id, fora_da_planilha=self.fora_da_planilha.get(fid, []),
         )
         return self.ctx
 
@@ -131,7 +143,7 @@ class Execucao:
 
 
 def precisa_pendencia(ctx: F.Contexto, a: Achado) -> bool:
-    if a.get("gravidade") == "ok" or a["id"] in ctx.pendencia_por_achado:
+    if a.get("gravidade") == "ok" or a["id"] in ctx.pendencia_por_achado or a.get("grupo") == F.GRUPO_CONFERIR_CA:
         return False
     return a.get("tipo") != "passivo" or a.get("regra") in F.PASSIVO_COM_ACAO
 
@@ -252,13 +264,21 @@ def construir_grafo(exe: Execucao):
                 p = F.criar_pendencia_validada(ctx, a)
                 exe.evento("criar_pendencia", {"achado_id": a["id"]}, p,
                            pensamento="guarda-corpo: achado sem pendência")
+        p = F.criar_conferencia(ctx)
+        if p:
+            exe.evento("criar_pendencia", {"grupo": F.GRUPO_CONFERIR_CA}, p,
+                       pensamento="CAs ou datas que não fecham com o resto da ficha: uma conferência no papel")
         return {}
 
     def consolidar(state: Estado) -> Estado:
         exe.ctx = None
         achados = list(exe.achados.values())
-        exposicao = F.IMPL["calcula_exposicao"](achados)
-        exe.evento("calcula_exposicao", {"achados": len(achados)}, exposicao)
+        # A exposição real (Gustavo) usa a função de cada funcionário (grau) e a data de cada achado (meses).
+        funcoes = {fid: str(ls[0].get("funcao", "")) for fid, ls in exe.por_funcionario.items() if ls}
+        for a in achados:
+            a.setdefault("data", _data_do_achado(exe, a))
+        exposicao = F.IMPL["calcula_exposicao"](achados, funcoes=funcoes)
+        exe.evento("calcula_exposicao", {"achados": len(achados), "funcoes": funcoes}, exposicao)
         relatorio = _gerar_relatorio(achados, exposicao)
         if relatorio is not None:
             exe.evento("gerar_relatorio", {"achados": len(achados)}, {"itens": len(relatorio.get("itens", []))})
@@ -283,6 +303,17 @@ def construir_grafo(exe: Execucao):
     return g.compile()
 
 
+def _data_do_achado(exe: Execucao, a: Achado) -> str | None:
+    """Data da linha do achado; para achado da ficha inteira (linha None), a entrega mais antiga do funcionário."""
+    linhas = exe.por_funcionario.get(str(a.get("funcionario_id")), [])
+    if a.get("linha") is not None:
+        for l in linhas:
+            if l.get("linha") == a["linha"] and l.get("data"):
+                return str(l["data"])
+    datas = sorted(str(l["data"]) for l in linhas if l.get("data"))
+    return datas[0] if datas else None
+
+
 def _gerar_relatorio(achados: list[Achado], exposicao: dict) -> dict | None:
     try:
         from heitor.agente.relatorio import gerar_relatorio
@@ -293,12 +324,52 @@ def _gerar_relatorio(achados: list[Achado], exposicao: dict) -> dict | None:
 
 # ------------------------------------------------------- interface ---
 
-def rodar_auditoria(auditoria_id: str, linhas: list[Any], emitir_evento: EmitirEvento | None = None) -> dict:
-    exe = Execucao(auditoria_id, linhas, emitir_evento)
+def rodar_auditoria(auditoria_id: str, linhas: list[Any], emitir_evento: EmitirEvento | None = None,
+                    fora_da_planilha: dict[str, list[dict]] | None = None, _passo_inicial: int = 0) -> dict:
+    exe = Execucao(auditoria_id, linhas, emitir_evento, fora_da_planilha)
+    exe.passo = _passo_inicial  # o log continua a numeração de quem chamou (conferir_e_auditar)
     grafo = construir_grafo(exe)
     limite = len(exe.por_funcionario) * (LIMITE_PASSOS * 2 + 8) + 10
     final = grafo.invoke({"fila": list(exe.por_funcionario)}, {"recursion_limit": limite})
     return final["resultado"]
+
+
+def conferir_e_auditar(auditoria_id: str, linhas: list[Any], fotos: dict[str, str],
+                       emitir_evento: EmitirEvento | None = None) -> dict:
+    """Fluxo principal com ficha de papel: os dados vêm da PLANILHA; a foto só prova a assinatura.
+
+    linhas: entregas da planilha (todas as fichas da auditoria).
+    fotos:  {funcionario_id: caminho da foto da ficha de papel daquele funcionário}.
+    Para cada funcionário com foto, confere as assinaturas contra a planilha (conferencia_assinaturas)
+    e depois roda a auditoria normal. Fica aqui (e não na API) porque os campos internos da conferência
+    (tipo da assinatura, entrega sem linha na ficha) se perdem quando a linha passa pelo modelo Linha.
+    """
+    from heitor.agente.conferencia_assinaturas import conferir_assinaturas
+
+    todas = [_para_dict(x) for x in linhas]
+    log = Execucao(auditoria_id, [], emitir_evento)  # só para emitir os eventos da conferência no log
+    fora: dict[str, list[dict]] = {}
+    for fid, foto in fotos.items():
+        do_func = [l for l in todas if str(l.get("funcionario_id")) == str(fid)]
+        if not do_func:
+            continue
+        try:
+            r = conferir_assinaturas(foto, do_func)
+        except Exception as e:  # noqa: BLE001 — sem a conferência, as assinaturas ficam como vieram da planilha
+            log.evento("conferir_assinaturas", {"funcionario_id": fid}, {"erro": str(e)[:200]})
+            continue
+        por_linha = {l["linha"]: l for l in r["linhas"]}
+        for i, l in enumerate(todas):
+            if str(l.get("funcionario_id")) == str(fid) and l.get("linha") in por_linha:
+                todas[i] = por_linha[l["linha"]]
+        fora[str(fid)] = r["fora_da_planilha"]
+        resumo = {"entregas": len(r["linhas"]),
+                  "assinadas": sum(1 for l in r["linhas"] if l.get("assinatura") is True and l["confianca"].get("assinatura", 0) >= 0.7),
+                  "em_duvida": sum(1 for l in r["linhas"] if l["confianca"].get("assinatura", 0) < 0.7),
+                  "fora_da_planilha": len(r["fora_da_planilha"]), "custo_usd": r["custo_usd"]}
+        log.evento("conferir_assinaturas", {"funcionario_id": fid}, resumo, custo=r["custo_usd"],
+                   pensamento="a planilha diz o que foi entregue; a ficha de papel precisa provar com a assinatura")
+    return rodar_auditoria(auditoria_id, todas, emitir_evento, fora_da_planilha=fora, _passo_inicial=log.passo)
 
 
 _REGRAS_DA_FICHA = {"epi_inadequado", "troca_atrasada"}
