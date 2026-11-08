@@ -108,11 +108,47 @@ def test_linha_ca_ausente():
         assert regras(a) == ["ca_ausente"] and a[0].tipo == "prova"
 
 
-def test_epi_ausente_e_inadequado():
-    ls = [L(1, "protetor auditivo", date(2026, 10, 1)), L(2, "capacete", date(2026, 10, 1))]
-    a = audita_funcionario(ls, "armador", hoje=HOJE)
-    assert regras(a) == ["epi_inadequado", "epi_inadequado"]
-    assert {x.gravidade for x in a} == {"irregular", "risco"}
+def test_epi_exigido_ausente():
+    a = audita_funcionario([L(1, "capacete", date(2026, 10, 1))], "armador", hoje=HOJE)
+    assert regras(a) == ["epi_inadequado"] and a[0].gravidade == "irregular" and "protetor auditivo" in a[0].evidencia
+    assert audita_funcionario([L(1, "protetor auditivo", date(2026, 10, 1)), L(2, "capacete", date(2026, 10, 1))],
+                              "armador", hoje=HOJE) == []
+
+
+def test_epi_fora_da_tabela_nao_gera_achado():
+    base = L(1, "protetor auditivo", date(2026, 10, 1))
+    for epi in ("botina", "luva de raspa", "óculos de proteção", "capacete classe A", "cinto de segurança"):
+        assert audita_funcionario([base, L(2, epi, date(2026, 10, 1))], "armador", hoje=HOJE) == [], epi
+
+
+def test_categoria_epi_reconhece_sem_depender_da_tabela_de_exigencia():
+    from heitor.dados.funcoes import FUNCOES, categoria_epi
+    assert {c for f in FUNCOES.values() for c in f["epis"]} == {"protetor auditivo"}
+    esperado = {"botina": "calçado", "bota de cano longo": "calçado", "luva de raspa": "luva",
+                "óculos de proteção": "óculos", "oculos": "óculos", "capacete classe C": "capacete",
+                "protetor plug": "protetor auditivo"}
+    for nome, cat in esperado.items():
+        assert categoria_epi(nome) == cat, nome
+
+
+def test_tabela_so_exige_protetor_auditivo_180_dias():
+    from heitor.dados.funcoes import exigencia_funcao
+    for f in ("pedreiro", "servente", "carpinteiro", "armador"):
+        e = exigencia_funcao(f)
+        assert e["epis"] == [{"epi": "protetor auditivo", "vida_util_dias": 180}]
+        assert (e["agente_nocivo"], e["grau"]) == ("ruído", 0.20)
+
+
+def test_protetor_em_intervalos_de_140_150_e_170_dias_nao_atrasa():
+    datas = [date(2025, 1, 1), date(2025, 5, 21), date(2025, 10, 18), date(2026, 4, 6)]
+    ls = [L(i, "protetor auditivo", d) for i, d in enumerate(datas, 1)]
+    assert audita_funcionario(ls, "servente", hoje=date(2026, 6, 1)) == []
+
+
+def test_protetor_com_intervalo_de_340_dias_atrasa_uma_vez():
+    ls = [L(1, "protetor auditivo", date(2025, 1, 1)), L(2, "protetor auditivo", date(2025, 12, 7))]
+    a = audita_funcionario(ls, "servente", hoje=date(2026, 1, 15))
+    assert regras(a) == ["troca_atrasada"] and "340 dias" in a[0].evidencia
 
 
 def test_troca_atrasada():

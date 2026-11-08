@@ -1,14 +1,10 @@
 # Placeholder: mesma tabela do stub da Sofia (origin/agente). Gustavo confirma valores.
-FUNCOES = {
-    "pedreiro": {"agente_nocivo": "ruído", "grau": 0.20,
-                 "epis": {"protetor auditivo": 90, "capacete": 730, "calçado": 180}},
-    "servente": {"agente_nocivo": "ruído", "grau": 0.20,
-                 "epis": {"protetor auditivo": 90, "capacete": 730, "calçado": 180}},
-    "carpinteiro": {"agente_nocivo": "ruído", "grau": 0.20,
-                    "epis": {"protetor auditivo": 90, "óculos": 365}},
-    "armador": {"agente_nocivo": "ruído", "grau": 0.20,
-                "epis": {"protetor auditivo": 90, "luva": 30}},
-}
+EXIGENCIA_PADRAO = {"agente_nocivo": "ruído", "grau": 0.20, "epis": {"protetor auditivo": 180}}
+FUNCOES = {funcao: {**EXIGENCIA_PADRAO, "epis": dict(EXIGENCIA_PADRAO["epis"])}
+           for funcao in ("pedreiro", "servente", "carpinteiro", "armador")}
+
+# categorias que o código reconhece numa linha de ficha, exigidas ou não
+CATEGORIAS_CONHECIDAS = ("protetor auditivo", "capacete", "calçado", "óculos", "luva")
 
 SINONIMOS = {
     "protetor auricular": "protetor auditivo", "plug": "protetor auditivo", "abafador": "protetor auditivo",
@@ -35,7 +31,7 @@ def categoria_epi(nome):
     for chave, cat in SINONIMOS.items():
         if chave in n:
             return cat
-    for cat in {c for f in FUNCOES.values() for c in f["epis"]}:
+    for cat in CATEGORIAS_CONHECIDAS:
         if cat in n:
             return cat
     return n

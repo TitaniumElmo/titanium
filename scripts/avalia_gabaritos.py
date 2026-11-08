@@ -8,11 +8,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from heitor.dados.caepi import consulta_ca
-from heitor.dados.funcoes import FUNCOES, categoria_epi
+from heitor.dados.funcoes import CATEGORIAS_CONHECIDAS, categoria_epi
 from heitor.dados.regras import audita_linha
 
 RAIZ = Path(__file__).resolve().parents[1] / "dados" / "gabaritos"
-CATEGORIAS = {c for f in FUNCOES.values() for c in f["epis"]}
+CATEGORIAS = set(CATEGORIAS_CONHECIDAS)
 TIPO_POR_VALOR = {"iniciais": "iniciais", "x": "marca", "visto": "marca", "texto": "texto",
                   "falhada": "ilegivel", "outro_nome": "outro_nome"}
 EQUIVALENTES = {"ca_nao_confere": "ca_nao_encontrado"}

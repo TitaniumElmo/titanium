@@ -161,11 +161,7 @@ def audita_funcionario(linhas: list[Linha], funcao: str, hoje=None) -> list[Acha
     entregas = {}
     for l in linhas:
         cat = categoria_epi(l.epi)
-        if cat not in exigidos:
-            achados.append(_achado(fid, l.linha, "epi_inadequado", "risco", "corrigivel",
-                                   f"linha {l.linha}, '{l.epi}' não é exigido para {funcao}",
-                                   "conferir se o EPI entregue é o certo para a função"))
-        elif l.data:
+        if cat in exigidos and l.data:
             entregas.setdefault(cat, []).append(l.data)
 
     for cat, vida_util in exigidos.items():
