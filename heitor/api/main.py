@@ -16,10 +16,10 @@ from dotenv import load_dotenv
 
 load_dotenv()  # antes de importar o resto: config lê as variáveis de ambiente
 
-from fastapi import FastAPI  # noqa: E402
+from fastapi import Depends, FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from heitor.api import cobranca, config, integracao, vigia  # noqa: E402
+from heitor.api import cobranca, config, integracao, seguranca, vigia  # noqa: E402
 from heitor.api.estado import estado  # noqa: E402
 from heitor.api.modelos import Auditoria  # noqa: E402
 from heitor.api.rotas import auditorias, ca, eventos, fontes, pendencias  # noqa: E402
@@ -75,10 +75,14 @@ def health() -> dict:
     }
 
 
-@app.post("/demo/reset", status_code=202, response_model=Auditoria, tags=["sistema"])
+@app.post(
+    "/demo/reset", status_code=202, response_model=Auditoria, tags=["sistema"],
+    dependencies=[Depends(seguranca.exigir_modo_demo), Depends(seguranca.exigir_admin)],
+)
 def demo_reset() -> Auditoria:
     """Apaga tudo e começa uma auditoria nova com as fichas de exemplo. O vigia
-    esquece o que já leu e, na próxima verificação estável, audita a pasta inteira."""
+    esquece o que já leu e, na próxima verificação estável, audita a pasta inteira.
+    Só com HEITOR_DEMO=1 e o token de administração (HEITOR_TOKEN_ADMIN)."""
     estado.limpar()
     if vigia.vigia:
         vigia.vigia.esquecer()

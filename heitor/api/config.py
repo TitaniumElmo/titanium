@@ -23,3 +23,24 @@ VIGIA_INTERVALO_S = float(os.getenv("HEITOR_VIGIA_INTERVALO", "10"))
 
 # Gatilho 2 sem vigia: a cada quantos segundos a cobrança de prazos vencidos roda.
 COBRANCA_INTERVALO_S = float(os.getenv("HEITOR_COBRANCA_INTERVALO", "60"))
+
+# Segurança (heitor/api/seguranca.py). Lidas na hora, para o .env e os testes valerem.
+EXTENSOES_UPLOAD = {".csv", ".jpg", ".jpeg", ".png", ".webp"}
+
+
+def token_admin() -> str:
+    """Token das rotas de administração; vazio = liberadas (desenvolvimento)."""
+    return os.getenv("HEITOR_TOKEN_ADMIN", "").strip()
+
+
+def modo_demo() -> bool:
+    """POST /demo/reset só existe com HEITOR_DEMO=1."""
+    return os.getenv("HEITOR_DEMO", "").strip().lower() in ("1", "true", "sim", "on")
+
+
+def max_upload_bytes() -> int:
+    return int(float(os.getenv("HEITOR_MAX_UPLOAD_MB", "15")) * 1024 * 1024)
+
+
+def max_arquivos() -> int:
+    return int(os.getenv("HEITOR_MAX_ARQUIVOS", "20"))

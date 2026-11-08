@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from heitor.api import config, execucao, integracao
 from heitor.api.estado import estado
 from heitor.api.modelos import Auditoria, ResumoAuditoria
-from heitor.api.uploads import salvar_upload
+from heitor.api.uploads import checar_quantidade, salvar_upload
 from heitor.contrato import Achado, Gravidade, TipoAchado
 
 router = APIRouter(prefix="/auditorias", tags=["auditorias"])
@@ -58,6 +58,7 @@ async def criar_auditoria(
     Com foto, o agente decide, por funcionário, se vale conferir as assinaturas no papel
     (`conferir_e_auditar`). Os dados (data, EPI, CA) vêm sempre da planilha.
     """
+    checar_quantidade(arquivos, fotos)
     auditoria_id = estado.novo_id("au")
     caminhos = [str(await salvar_upload(a, auditoria_id)) for a in arquivos if a.filename]
     if exemplo:
