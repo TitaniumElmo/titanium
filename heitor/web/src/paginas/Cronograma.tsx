@@ -6,7 +6,7 @@ import { Pagina } from "../componentes/Pagina";
 import { CartaoAba } from "../componentes/ResumoHistorico";
 import { Selo } from "../componentes/Selos";
 import { cronograma } from "../derivados";
-import { dataCurta, isoDia } from "../formato";
+import { dataCurta, isoDia, tituloLimpo } from "../formato";
 import type { ItemCronograma, StatusCronograma, TipoCronograma } from "../tipos";
 import { cn, IconeAlerta, IconeAtividade, IconeCalendario, IconeLista } from "../util";
 
@@ -53,11 +53,6 @@ function inicioDaSemana(dia: string): string {
   return isoDia(d.getTime() - deslocamento * DIA);
 }
 
-function limparTitulo(t: string): string {
-  const sem = t.replace(/^Prazo da pendência [^:]+:\s*/i, "");
-  return sem.charAt(0).toUpperCase() + sem.slice(1);
-}
-
 function classificar(item: ItemCronograma, semanaAtual: string): Horizonte {
   if (item.status === "feito") return "concluidos";
   if (item.status === "atrasado") return "atrasados";
@@ -99,7 +94,7 @@ function ItemLinha({ item, hoje }: { item: ItemCronograma; hoje: string }) {
             {st.rotulo}
           </span>
         </div>
-        <p className="mt-1.5 text-sm font-medium sm:text-base">{limparTitulo(item.titulo)}</p>
+        <p className="mt-1.5 text-sm font-medium sm:text-base">{tituloLimpo(item.titulo)}</p>
         <p className="mt-0.5 text-sm text-apoio">
           {item.nome ?? (item.funcao ? `Função: ${item.funcao}` : "")}
           {item.nome && item.funcao ? ` · ${item.funcao}` : ""}
