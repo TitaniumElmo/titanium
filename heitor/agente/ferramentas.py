@@ -12,7 +12,6 @@ from __future__ import annotations
 import importlib
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -89,7 +88,6 @@ class Contexto:
     fora_da_planilha: list[dict[str, Any]] = field(default_factory=list)  # linhas do papel sem entrega na planilha
     foto: str | None = None  # foto da ficha de papel deste funcionário, se houver
     papel_conferido: bool = False
-    aso_auditado: bool = False  # exames médicos (ASO), só com HEITOR_EXAMES=1
     empresa: list[dict[str, Any]] = field(default_factory=list)  # todas as entregas da auditoria (só leitura)
 
     def achados_do_funcionario(self) -> list[Achado]:
@@ -341,21 +339,14 @@ def _t_auditar_ficha(ctx: Contexto, args: dict) -> Resultado:
         else:
             grupos["passivo"].append(r)
     datas = sorted(str(l["data"]) for l in ctx.linhas.values() if l.get("data"))
-    saida = {
+    return Resultado({
         "funcao": ctx.funcao,  # a tela lê a função daqui (o LLM nem sempre chama exigencia_funcao)
         "linhas_auditadas": len(ctx.linhas), "periodo": f"{datas[0]} a {datas[-1]}" if datas else None,
         "sem_falhas": not falhas, **{k: v for k, v in grupos.items() if v},
         # Só quando há itens: o aviso sempre presente fez o LLM ignorar falhas de outros grupos.
         **({"observacao": "os itens de conferir_no_papel viram uma conferência automática no fim; "
                           "os de corrigir_agora e depende_de_prova continuam com você"} if grupos["conferir_no_papel"] else {}),
-    }
-    if aso_ligado() and not ctx.aso_auditado:
-        # Com os exames ligados, a ficha vem com o ASO junto: o LLM decide EPI e exame de uma vez
-        # (prioridade cruzada, uma pendência só para os dois), em vez de criar as de EPI antes de ver o ASO.
-        saida["exames_aso"] = _t_auditar_aso(ctx, {}).saida
-        if saida["exames_aso"].get("achados_aso"):
-            saida["sem_falhas"] = False  # EPI limpo, mas há exame a cobrar
-    return Resultado(saida)
+    })
 
 
 def _t_conferir_ficha_de_papel(ctx: Contexto, args: dict) -> Resultado:
@@ -476,26 +467,8 @@ def _t_criar_pendencia(ctx: Contexto, args: dict) -> Resultado:
     if achado.get("tipo") == "passivo" and achado.get("regra") not in PASSIVO_COM_ACAO:
         return Resultado({"erro": "passivo sem correção não gera pendência: vai para o relatório com a exposição"},
                          ok=False)
-    tambem, recusados = [], {}
-    for aid in [str(x) for x in (args.get("tambem") or []) if str(x) != achado["id"]]:
-        outro = ctx.achados.get(aid)
-        if not outro or outro.get("funcionario_id") != ctx.funcionario_id or outro.get("gravidade") == "ok":
-            recusados[aid] = "achado inexistente ou de outro funcionário"
-        elif aid in ctx.pendencia_por_achado:
-            recusados[aid] = f"já tem a pendência {ctx.pendencia_por_achado[aid]}"
-        elif DESTINO_POR_TIPO.get(outro.get("tipo", ""), "tecnico") != DESTINO_POR_TIPO.get(achado.get("tipo", ""), "tecnico"):
-            recusados[aid] = "vai para outro destino (técnico x RH): precisa de pendência própria"
-        elif outro.get("tipo") == "passivo" and outro.get("regra") not in PASSIVO_COM_ACAO:
-            recusados[aid] = "passivo sem correção não gera pendência"
-        else:
-            tambem.append(outro)
     pendencia = criar_pendencia_validada(ctx, achado, args.get("acao"), args.get("prazo_dias"))
-    for outro in tambem:  # a mesma pendência cobre os dois (como a rede de segurança faz com ações iguais)
-        ctx.pendencia_por_achado[outro["id"]] = pendencia["id"]
-    if not tambem and not recusados:
-        return Resultado(pendencia)
-    return Resultado({**pendencia, "tambem_cobre": [a["id"] for a in tambem],
-                      **({"tambem_recusados": recusados} if recusados else {})})
+    return Resultado(pendencia)
 
 
 def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, prazo_dias: Any = None,
@@ -582,57 +555,6 @@ def _sugere_fraude(texto: str, hoje: date | None = None) -> bool:
     return False
 
 
-# --------------------------------------------- exames médicos (ASO), opcional ---
-# Regras do Gustavo (heitor/dados/aso.py). Desligado por padrão: sem HEITOR_EXAMES=1, a ferramenta nem é
-# registrada e o agente fica exatamente como antes. O arquivo vem de HEITOR_ASO_CSV.
-ASO_CSV_PADRAO = "heitor/exemplos/aso_exemplo.csv"
-_cache_aso: dict[tuple[str, str], list[Achado]] = {}
-
-
-def aso_ligado() -> bool:
-    try:
-        from heitor.dados.aso import exames_ligado
-    except ImportError:
-        return False
-    return exames_ligado()
-
-
-def _achados_aso(hoje: date | None = None) -> list[Achado]:
-    """Achados de ASO da empresa inteira (lidos uma vez por arquivo e dia)."""
-    from heitor.dados.aso import audita_aso_csv
-
-    caminho = os.getenv("HEITOR_ASO_CSV") or ASO_CSV_PADRAO
-    hoje = hoje or date.today()
-    chave = (caminho, hoje.isoformat())
-    if chave not in _cache_aso:
-        _cache_aso[chave] = audita_aso_csv(caminho, hoje)
-    return _cache_aso[chave]
-
-
-def _t_auditar_aso(ctx: Contexto, args: dict) -> Resultado:
-    """Exames médicos (ASO) do funcionário: ausente, periódico vencido, sem médico ou assinatura, admissional
-    tardio, inapto em atividade. Regras do Gustavo; o agente só registra e cobra."""
-    ctx.aso_auditado = True
-    meus = [dict(a) for a in _achados_aso() if str(a.get("funcionario_id")) == ctx.funcionario_id]
-    if not meus:
-        return Resultado({"info": "nenhum problema de ASO para este funcionário (ou ele não está no arquivo de ASO)"})
-    for a in meus:
-        a["id"] = f"{a['id']}-{ctx.funcionario_id}"  # ids únicos mesmo com várias auditorias
-        a["auditoria_id"] = ctx.auditoria_id  # o achado do aso.py vem com None
-    registrados = _registrar(ctx, meus)
-    try:
-        exig = IMPL["exigencia_funcao"](ctx.funcao) or {}
-    except Exception:  # noqa: BLE001
-        exig = {}
-    epi_sem_pendencia = [_resumo_achado(a) for a in ctx.achados_do_funcionario()
-                         if not str(a.get("regra", "")).startswith("aso_") and a.get("gravidade") != "ok"
-                         and a["id"] not in ctx.pendencia_por_achado and a.get("tipo") != "passivo"
-                         and a.get("grupo") != GRUPO_CONFERIR_CA]
-    return Resultado({"achados_aso": [_resumo_achado(a) for a in registrados],
-                      "risco_da_funcao": exig.get("agente_nocivo") or "nenhum agente nocivo na tabela",
-                      "epi_sem_pendencia": epi_sem_pendencia})
-
-
 def _t_terminei(ctx: Contexto, args: dict) -> Resultado:
     return Resultado({"resumo": str(args.get("resumo", ""))[:500]}, terminou=True)
 
@@ -673,16 +595,9 @@ FERRAMENTAS: dict[str, Ferramenta] = {f.nome: f for f in [
                "CAs com número parecido, para um CA não encontrado. Sempre suposição.", _t_buscar_ca_proximo),
     Ferramenta("reextrair_campo", "reextrair_campo(linha: int, campo: str)",
                "Lê de novo um campo com confiança < 0.7 (só para fichas em foto).", _t_reextrair_campo),
-    Ferramenta("criar_pendencia",
-               ("criar_pendencia(achado_id: str, acao: str, prazo_dias: int, tambem: list[str] = [])" if aso_ligado()
-                else "criar_pendencia(achado_id: str, acao: str, prazo_dias: int)"),
-               ("Cria a pendência de um achado (o destino técnico/RH é definido pelo tipo)."
-                + (" 'tambem': outros achados do mesmo destino que esta pendência cobre (uma ida só)." if aso_ligado()
-                   else "")), _t_criar_pendencia),
+    Ferramenta("criar_pendencia", "criar_pendencia(achado_id: str, acao: str, prazo_dias: int)",
+               "Cria a pendência de um achado (o destino técnico/RH é definido pelo tipo).", _t_criar_pendencia),
     Ferramenta("terminei", "terminei(resumo: str)", "Encerra a auditoria deste funcionário.", _t_terminei),
-    *([Ferramenta("auditar_aso", "auditar_aso()",
-                  "Exames médicos (ASO, NR-7) do funcionário: ausente, periódico vencido, sem médico ou assinatura, "
-                  "admissional tardio, inapto em atividade.", _t_auditar_aso)] if aso_ligado() else []),
 ]}
 
 
