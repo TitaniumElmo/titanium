@@ -81,7 +81,7 @@ def criar_pendencia(
     if auditoria_id:
         estado.salvar_achado(achado)
     estado.salvar_pendencia(pendencia)
-    notificar(pendencia)
+    notificar(pendencia, acao_da_regra=achado.acao_sugerida)  # o e-mail leva o texto da regra, não o do LLM
     return _json(pendencia)
 
 
@@ -132,7 +132,8 @@ def fechar_pendencia(
     if resultado:
         return _json(mudar_status(pendencia_id, "fechada", nota or "reauditoria conferiu a correção"))
     p = mudar_status(pendencia_id, "reaberta", nota or "reauditoria não conferiu a correção")
-    notificar(p, assunto="Pendência reaberta pelo Heitor")
+    achado = estado.obter_achado(p.achado_id, p.auditoria_id)
+    notificar(p, assunto="Pendência reaberta pelo Heitor", acao_da_regra=achado.acao_sugerida if achado else None)
     return _json(p)
 
 
