@@ -10,7 +10,11 @@ from heitor.agente import extracao, grafo, relatorio
 from heitor.agente import ferramentas as ferramentas_agente
 from heitor.api import config, integracao
 from heitor.api.estado import estado
+from heitor.dados.caepi import CAMINHO
 from tests.test_api import esperar, responder
+
+# O agente real chama as regras reais do Gustavo, que precisam da base CAEPI em dados/.
+precisa_base = pytest.mark.skipif(not CAMINHO.exists(), reason="base CAEPI não está em dados/ (RelatorioCA_*.csv)")
 
 CORRECAO_0302 = config.PASTA_EXEMPLOS / "correcao_0302.csv"
 
@@ -42,6 +46,7 @@ def _pendencia_epi(client, aud_id, funcionario_id):
     raise AssertionError("sem pendência de protetor auditivo")
 
 
+@precisa_base
 def test_auditoria_com_agente_real(client, real):
     resumo = _auditar(client)
     assert resumo["status"] == "concluida", resumo["erro"]
@@ -54,6 +59,7 @@ def test_auditoria_com_agente_real(client, real):
     assert rel["texto"] and rel["itens"]
 
 
+@precisa_base
 def test_reauditoria_com_agente_real(client, real):
     aud = _auditar(client)
     p = _pendencia_epi(client, aud["id"], "0302")

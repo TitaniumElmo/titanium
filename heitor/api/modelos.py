@@ -19,10 +19,13 @@ class Auditoria(BaseModel):
     concluida_em: Optional[datetime] = None
     arquivos: list[str] = Field(default_factory=list)
     erro: Optional[str] = None
+    disparado_por: Optional[str] = None  # ex.: "mudança na pasta: ficha_0302.csv"; None = upload manual
     # Vindos do resultado de rodar_auditoria (agente), quando ele devolve.
     exposicao: Optional[dict[str, Any]] = None  # {"total_brl", "salario_minimo", ...}
     relatorio: Optional[dict[str, Any]] = None  # {"itens", "texto", ...}
-    modo: Optional[str] = None  # "llm" ou "deterministico"
+    modo: Optional[str] = None  # "llm" | "misto" (algum funcionário sem LLM) | "deterministico"
+    modo_por_funcionario: Optional[dict[str, str]] = None  # funcionário -> "llm" | "degradado" | "deterministico"
+    custo_usd: Optional[float] = None  # custo do LLM informado pelo agente (a auditoria toda)
 
 
 class ResumoAuditoria(Auditoria):
