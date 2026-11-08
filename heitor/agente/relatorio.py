@@ -37,8 +37,9 @@ _TEXTOS: dict[str, dict[str, Any]] = {
     },
     "ca_nao_encontrado": {
         "titulo": "CA não encontrado na base do MTE",
-        "explicacao": "O número registrado não existe na base CAEPI. Pode ser erro de digitação: "
-                      "números parecidos são só suposição e precisam de confirmação.",
+        "explicacao": "O número registrado não existe na base CAEPI ou é de outro tipo de equipamento "
+                      "(por exemplo, CA de óculos numa luva). Pode ser erro de digitação, de leitura ou de "
+                      "registro: números parecidos são só suposição e precisam de confirmação no papel.",
         "base": [SUMULA_80],
     },
     "ca_vencido": {
@@ -74,6 +75,25 @@ _TEXTOS: dict[str, dict[str, Any]] = {
         "explicacao": "Sem prova do treinamento exigido, a defesa fica muito fraca. A lista de presença "
                       "pode suprir a lacuna.",
         "base": [SUMULA_289],
+    },
+    "entrega_sem_ficha": {
+        "titulo": "Entrega da planilha sem linha na ficha de papel",
+        "explicacao": "A planilha registra a entrega, mas a ficha de papel assinada não mostra essa linha. "
+                      "Sem a ficha assinada, a entrega fica sem prova. Como a foto pode ter sido lida errado, "
+                      "o técnico confere no papel antes de qualquer conclusão.",
+        "base": [SUMULA_289],
+    },
+    "ficha_sem_planilha": {
+        "titulo": "Linha na ficha de papel sem entrega na planilha",
+        "explicacao": "A ficha de papel registra uma entrega que a planilha de controle não tem. "
+                      "Ou a planilha está desatualizada, ou a linha foi lida errado da foto: conferir os dois.",
+        "base": [],
+    },
+    "leitura_incerta": {
+        "titulo": "Dado da ficha a conferir no papel",
+        "explicacao": "Um dado da ficha (CA, data ou assinatura) não fecha com o resto da ficha ou com a base "
+                      "do MTE. Pode ser erro de leitura da foto ou erro de registro; o técnico confere no papel.",
+        "base": [],
     },
     "funcao_desconhecida": {
         "titulo": "Função fora da tabela função → EPI",

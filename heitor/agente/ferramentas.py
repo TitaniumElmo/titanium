@@ -276,7 +276,8 @@ def criar_conferencia(ctx: Contexto) -> Pendencia | None:
     else:  # só datas ou regras ainda fora do contrato: um achado de risco aceito pelo contrato ancora a pendência
         ancora = {"id": f"leitura-{ctx.funcionario_id}", "funcionario_id": ctx.funcionario_id,
                   "auditoria_id": ctx.auditoria_id, "linha": None,
-                  "regra": "falha_de_ferramenta",  # PROPOSTA ao Pierre: regra "leitura_incerta"
+                  # "leitura_incerta" entra no contrato com o PR #8; até lá, a regra antiga ancora a pendência
+                  "regra": "leitura_incerta" if "leitura_incerta" in REGRAS_DO_CONTRATO else "falha_de_ferramenta",
                   "gravidade": "risco", "tipo": "corrigivel", "grupo": GRUPO_CONFERIR_CA,
                   "evidencia": "; ".join(itens)[:300], "acao_sugerida": "conferir na ficha física"}
         ctx.achados[ancora["id"]] = ancora
