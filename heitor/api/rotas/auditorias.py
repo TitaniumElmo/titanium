@@ -27,26 +27,51 @@ def _auditoria_ou_404(auditoria_id: str) -> Auditoria:
     return aud
 
 
-def criar_e_iniciar(caminhos: list[str], auditoria_id: Optional[str] = None) -> Auditoria:
+def criar_e_iniciar(
+    caminhos: list[str],
+    auditoria_id: Optional[str] = None,
+    fotos: Optional[list[tuple[str, Optional[str]]]] = None,
+) -> Auditoria:
     auditoria_id = auditoria_id or estado.novo_id("au")
-    aud = estado.criar_auditoria(auditoria_id, [Path(c).name for c in caminhos])
-    execucao.iniciar_auditoria(aud.id, caminhos)
+    fotos = fotos or []
+    aud = estado.criar_auditoria(auditoria_id, [Path(c).name for c in caminhos] + [Path(f).name for f, _ in fotos])
+    execucao.iniciar_auditoria(aud.id, caminhos, fotos)
     return aud
 
 
 @router.post("", status_code=202, response_model=Auditoria)
 async def criar_auditoria(
-    arquivos: list[UploadFile] = File(default=[]),
+    arquivos: list[UploadFile] = File(default=[], description="planilhas (CSV) com as entregas: a fonte dos dados"),
+    fotos: list[UploadFile] = File(default=[], description="fotos das fichas de papel: só conferem as assinaturas"),
+    funcionarios_das_fotos: list[str] = Form(
+        default=[],
+        description="funcionario_id de cada foto, na mesma ordem de `fotos`. "
+        "Se faltar, vale a matrícula no nome do arquivo (ex.: 0302.jpg)",
+    ),
     exemplo: bool = Form(False, description="true = usar as fichas de exemplo"),
 ) -> Auditoria:
-    """Recebe fichas (CSV ou foto) e roda o agente em segundo plano."""
+    """Recebe as planilhas e, opcionalmente, as fotos das fichas de papel, e roda o agente em segundo plano.
+
+    Com foto, o agente decide, por funcionário, se vale conferir as assinaturas no papel
+    (`conferir_e_auditar`). Os dados (data, EPI, CA) vêm sempre da planilha.
+    """
     auditoria_id = estado.novo_id("au")
     caminhos = [str(await salvar_upload(a, auditoria_id)) for a in arquivos if a.filename]
     if exemplo:
         caminhos.append(str(config.FICHA_EXEMPLO))
+    pares = []
+    for i, foto in enumerate(f for f in fotos if f.filename):
+        informado = funcionarios_das_fotos[i] if i < len(funcionarios_das_fotos) else None
+        pares.append((str(await salvar_upload(foto, auditoria_id, "fotos")), informado or None))
     if not caminhos:
-        raise HTTPException(400, "envie ao menos um arquivo em 'arquivos' ou use exemplo=true")
-    return criar_e_iniciar(caminhos, auditoria_id)
+        raise HTTPException(400, "envie ao menos uma planilha em 'arquivos' ou use exemplo=true")
+    return criar_e_iniciar(caminhos, auditoria_id, pares)
+
+
+@router.get("", response_model=list[Auditoria])
+def listar() -> list[Auditoria]:
+    """Todas as auditorias, a mais recente primeiro (inclui as disparadas pelo vigia)."""
+    return [a.model_copy(update={"relatorio": None}) for a in estado.listar_auditorias()]
 
 
 @router.get("/{auditoria_id}", response_model=ResumoAuditoria)
