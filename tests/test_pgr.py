@@ -142,3 +142,66 @@ def test_reserva_nunca_irregular_e_nao_existe_com_a_chave_desligada(pgr, monkeyp
     assert {x["gravidade"] for x in audita_funcionario(dicts(ls), "servente", hoje=HOJE)} == {"risco"}
     monkeypatch.delenv("HEITOR_PGR")
     assert audita_funcionario(dicts(ls), "servente", hoje=HOJE) == []
+
+
+def kit_com(epi, d1, d2, fid="0301"):
+    base = [l for l in completa(fid) if categoria_epi(l.epi) != epi]
+    return base + [L(20, epi, d1, fid), L(21, epi, d2, fid)]
+
+
+def test_capacete_com_intervalo_de_800_dias_vira_troca_passado_acidente_sem_reais(pgr):
+    ls = kit_com("capacete", date(2023, 1, 1), date(2025, 3, 11))
+    a = audita_funcionario(dicts(ls), "pedreiro", hoje=HOJE)
+    assert regras(a) == ["troca_passado"]
+    assert (a[0]["gravidade"], a[0]["tipo"], a[0]["agente_nocivo"], a[0]["linha"]) == ("irregular", "passivo", "acidente", None)
+    assert a[0]["evidencia"] == "capacete: 800 dias entre 2023-01-01 e 2025-03-11; vida útil 730 dias"
+    r = calcula_exposicao(a, funcoes={"0301": "pedreiro"}, hoje=HOJE)
+    assert r["total_brl"] == 0 and r["funcionarios"] == []
+
+
+@pytest.mark.parametrize("epi,funcao,d1,d2,vida", [
+    ("calçado", "armador", date(2024, 1, 1), date(2025, 3, 1), 365),
+    ("óculos", "carpinteiro", date(2024, 1, 1), date(2025, 3, 1), 365),
+    ("luva", "servente", date(2026, 1, 1), date(2026, 6, 1), 90),
+])
+def test_calcado_oculos_e_luva_tambem_viram_troca_passado_acidente(pgr, epi, funcao, d1, d2, vida):
+    kit = {"armador": ["protetor auditivo", "capacete", "calçado", "luva"],
+           "carpinteiro": ["protetor auditivo", "capacete", "calçado", "óculos"],
+           "servente": ["protetor auditivo", "capacete", "calçado", "luva"]}[funcao]
+    base = completa()
+    ls = [l for l in base if categoria_epi(l.epi) in kit and categoria_epi(l.epi) != epi]
+    ls += [L(20, epi, d1), L(21, epi, d2)]
+    ls = [Linha.model_validate(l.model_dump() | {"funcao": funcao}) for l in ls]
+    a = audita_funcionario(dicts(ls), funcao, hoje=HOJE)
+    passados = [x for x in a if x["regra"] == "troca_passado"]
+    assert len(passados) == 1 and passados[0]["agente_nocivo"] == "acidente"
+    assert (passados[0]["gravidade"], passados[0]["tipo"]) == ("irregular", "passivo")
+    assert f"vida útil {vida} dias" in passados[0]["evidencia"]
+    assert calcula_exposicao(a, funcoes={"0301": funcao}, hoje=HOJE)["total_brl"] == 0
+
+
+def test_protetor_com_intervalo_estourado_continua_com_reais(pgr):
+    ls = kit_com("protetor auditivo", date(2025, 1, 1), date(2025, 12, 1))
+    ls = [l for l in ls if not (l.epi == "protetor auditivo" and l.data == date(2026, 10, 1))]
+    a = audita_funcionario(dicts(ls), "pedreiro", hoje=HOJE)
+    passados = [x for x in a if x["regra"] == "troca_passado"]
+    assert len(passados) == 1 and passados[0]["agente_nocivo"] == "ruído"
+    r = calcula_exposicao(a, funcoes={"0301": "pedreiro"}, hoje=HOJE)
+    assert r["funcionarios"] == ["0301"] and r["total_brl"] == round(0.20 * 1621 * (334 - 180) / 30.4375, 2)
+
+
+def test_capacete_e_protetor_juntos_somam_so_o_ruido(pgr):
+    ls = kit_com("capacete", date(2023, 1, 1), date(2025, 3, 11))
+    ls = [l for l in ls if l.epi != "protetor auditivo"] + [
+        L(30, "protetor auditivo", date(2025, 1, 1)), L(31, "protetor auditivo", date(2025, 12, 1)),
+        L(32, "protetor auditivo", date(2026, 10, 1))]
+    a = audita_funcionario(dicts(ls), "pedreiro", hoje=HOJE)
+    assert sorted(x["agente_nocivo"] for x in a if x["regra"] == "troca_passado") == ["acidente", "ruído", "ruído"]
+    r = calcula_exposicao(a, funcoes={"0301": "pedreiro"}, hoje=HOJE)
+    assert r["por_funcionario"]["0301"]["meses"] == round((334 - 180) / 30.4375, 2)
+
+
+def test_chave_desligada_capacete_com_intervalo_estourado_nao_gera_achado(monkeypatch):
+    monkeypatch.delenv("HEITOR_PGR", raising=False)
+    ls = [L(1, "protetor auditivo", date(2026, 10, 1)), L(2, "capacete", date(2023, 1, 1)), L(3, "capacete", date(2025, 3, 11))]
+    assert audita_funcionario(dicts(ls), "pedreiro", hoje=HOJE) == []
