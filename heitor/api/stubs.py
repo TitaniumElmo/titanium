@@ -206,19 +206,37 @@ def rodar_auditoria(auditoria_id: str, linhas: list[Linha], emitir_evento: Calla
                 emitir("ferramenta", "consulta_ca", {"numero": l.ca, "data": l.data.isoformat()}, consulta_ca(l.ca, l.data))
         emitir("ferramenta", "exigencia_funcao", {"funcao": linhas_func[0].funcao}, exigencia_funcao(linhas_func[0].funcao))
 
+        for l in linhas_func:
+            emitir("ferramenta", "audita_linha", {"linha": l.linha}, [f.regra for f in _falhas_da_linha(l)])
+        funcao = linhas_func[0].funcao
+        emitir("ferramenta", "audita_funcionario", {"funcao": funcao},
+               [f.regra for f in _falhas_do_funcionario(funcao, linhas_func)])
+
         for f in _avaliar(linhas_func):
             achado = Achado(
                 id=estado.novo_id("a"), auditoria_id=auditoria_id, funcionario_id=func_id, linha=f.linha,
                 regra=f.regra, gravidade=f.gravidade, tipo=f.tipo, evidencia=f.evidencia,
                 acao_sugerida=f.acao, norma=f.norma, exposicao_rs=f.exposicao_rs,
             )
-            emitir("ferramenta", "audita_linha", {"linha": f.linha}, achado.model_dump(mode="json"))
             p = criar_pendencia(achado, f.destino, f.acao, date.today() + timedelta(days=f.prazo_dias))
             emitir("ferramenta", "criar_pendencia", {"achado_id": achado.id, "destino": f.destino}, {"pendencia_id": p["id"]})
             achados.append(achado)
 
         emitir("decisao", None, {}, "terminei", 0.0004)
     return achados
+
+
+def conferir_e_auditar(
+    auditoria_id: str, linhas: list[Linha], fotos: dict[str, str], emitir_evento: Callable[[Evento], None]
+) -> list[Achado]:
+    """Stub: audita só a planilha. As fotos ficam registradas no log, sem conferência."""
+    if fotos:
+        emitir_evento(Evento(
+            auditoria_id=auditoria_id, passo=0, tipo="decisao", ferramenta=None,
+            entrada={"fotos": {f: Path(c).name for f, c in fotos.items()}},
+            saida="stub: a conferência da ficha de papel precisa do agente real", ts=datetime.now(),
+        ))
+    return rodar_auditoria(auditoria_id, linhas, emitir_evento)
 
 
 def reauditar(pendencia_id: str, linhas: list[Linha], emitir_evento: Optional[Callable[[Evento], None]] = None) -> list[Achado]:

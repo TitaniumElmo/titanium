@@ -14,3 +14,9 @@ FORCAR_STUBS = os.getenv("HEITOR_STUBS") == "1"
 
 # Pausa entre eventos do agente falso, para o log ao vivo ficar visível na tela.
 STUB_ATRASO_S = float(os.getenv("HEITOR_STUB_ATRASO", "0.3"))
+
+# Gatilho 1 (vigia da pasta). Drive tem prioridade sobre a pasta local.
+DRIVE_PASTA = os.getenv("HEITOR_DRIVE_PASTA") or None
+DRIVE_CREDENCIAIS = os.path.expanduser(os.getenv("HEITOR_DRIVE_CREDENCIAIS", "~/.config/heitor/drive.json"))
+FONTE_PASTA = os.getenv("HEITOR_FONTE_PASTA") or None
+VIGIA_INTERVALO_S = float(os.getenv("HEITOR_VIGIA_INTERVALO", "10"))

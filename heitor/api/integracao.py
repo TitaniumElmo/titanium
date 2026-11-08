@@ -44,6 +44,8 @@ def _resolver(nome: str, modulos: tuple[str, ...]) -> Callable[..., Any]:
 extrair_ficha = _resolver("extrair_ficha", ("heitor.agente.extracao", "heitor.agente"))
 rodar_auditoria = _resolver("rodar_auditoria", ("heitor.agente.grafo", "heitor.agente"))
 reauditar = _resolver("reauditar", ("heitor.agente.grafo", "heitor.agente"))
+# Ficha de papel conferida contra a planilha (agente do PR #6). Sem ele, o stub audita só a planilha.
+conferir_e_auditar = _resolver("conferir_e_auditar", ("heitor.agente.grafo", "heitor.agente"))
 gerar_relatorio = _resolver("gerar_relatorio", ("heitor.agente.relatorio", "heitor.agente"))
 consulta_ca = _resolver("consulta_ca", ("heitor.dados.caepi", "heitor.dados"))
 
