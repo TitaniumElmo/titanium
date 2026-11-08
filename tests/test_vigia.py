@@ -206,3 +206,45 @@ def test_planilha_do_google_com_exportacao_atrasada(client, tmp_path):
     assert resultados[-1]["funcionarios"] == ["0302"]
     esperar_auditoria(resultados[-1]["auditoria_id"])
     assert ate(lambda: estado.obter_pendencia(p.id).status == "fechada")
+
+
+
+def test_fontes_mostra_a_tabela_de_colunas_da_planilha(vigia, pasta, monkeypatch):
+    """Tela de Fontes (pedido da Luciana): como cada coluna de cada planilha foi entendida.
+    Sai do mapeamento["colunas"] do extrair_ficha; arquivo apagado some da tabela."""
+    from heitor.api import integracao
+
+    original = integracao.extrair_ficha  # nos testes, o stub (devolve só a lista de linhas)
+    tabela = [{"indice": 0, "coluna": "Matrícula", "campo": "funcionario_id", "campo_rotulo": "Matrícula",
+               "confianca": 1.0, "origem": "heuristica", "exemplo": "0302", "situacao": "entendida"}]
+    monkeypatch.setattr(integracao, "extrair_ficha",
+                        lambda arquivo: {"linhas": original(arquivo), "mapeamento": {"colunas": tabela}})
+    (pasta / "fichas.csv").write_text(FICHAS, encoding="utf-8")
+    disparar(vigia)
+    assert vigia.status()["colunas"] == {"fichas.csv": tabela}
+
+    (pasta / "fichas.csv").unlink()
+    vigia.verificar()
+    assert vigia.status()["colunas"] == {}
+
+
+def test_fontes_sem_tabela_quando_o_extrair_ficha_nao_traz(vigia, pasta):
+    """Stub, foto ou PDF: sem mapeamento["colunas"], o vigia segue igual e a tabela fica vazia."""
+    (pasta / "fichas.csv").write_text(FICHAS, encoding="utf-8")
+    assert disparar(vigia)["mudou"]
+    assert vigia.status()["colunas"] == {}
+
+
+def test_ler_colunas_com_o_extrair_ficha_de_verdade(monkeypatch):
+    """Com o extrair_ficha real (agente): uma linha por coluna, na ordem da planilha (precisa do PR #28)."""
+    from heitor.agente import extracao
+    from heitor.api import execucao, integracao
+
+    if "colunas" not in extracao.mapear_colunas(["Matrícula"], [["0302"]]):
+        pytest.skip("mapear_colunas ainda sem a tabela de colunas (PR #28)")
+    monkeypatch.setenv("HEITOR_LLM", "off")
+    monkeypatch.setattr(integracao, "extrair_ficha", extracao.extrair_ficha)
+    linhas, tabela = execucao.ler_linhas_e_colunas(str(config.FICHA_EXEMPLO))
+    assert linhas
+    assert [c["coluna"] for c in tabela] == FICHAS.splitlines()[0].split(",")
+    assert all(c["situacao"] in ("entendida", "conferir", "ignorada") for c in tabela)

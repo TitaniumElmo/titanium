@@ -86,6 +86,7 @@ class Vigia:
         self._versoes: dict[str, str] = {}  # planilha do Google -> última versão vista
         self._avisado: dict[str, tuple] = {}  # arquivo -> edição já anunciada no feed (não repete)
         self._linhas: dict[str, list[Linha]] = {}  # arquivo -> linhas lidas
+        self._colunas: dict[str, tuple[str, list[dict]]] = {}  # planilha -> (nome, tabela de colunas)
         # Foto de ficha de papel: não é lida como ficha (os dados vêm da planilha); só vai junto para o
         # agente conferir as assinaturas. arquivo -> (nome, assinatura, caminho baixado)
         self._fotos: dict[str, tuple[str, str, str]] = {}
@@ -109,6 +110,9 @@ class Vigia:
             "funcionarios": len(self._hashes),
             "fotos": len(self._fotos),
             "fotos_sem_dono": self.fotos_sem_dono,
+            # Como o Heitor entendeu cada coluna de cada planilha (só código, sem LLM aqui):
+            # nome do arquivo -> [{indice, coluna, campo, campo_rotulo, confianca, origem, exemplo, situacao}]
+            "colunas": {nome: tabela for nome, tabela in self._colunas.values()},
             "ultimo_erro": self.ultimo_erro,
             "ultimo_disparo": self.ultimo_disparo,
         }
@@ -214,6 +218,7 @@ class Vigia:
         for i in removidos:
             self._processados.pop(i)
             self._linhas.pop(i, None)
+            self._colunas.pop(i, None)
             self._fotos.pop(i, None)
         return removidos
 
@@ -222,7 +227,7 @@ class Vigia:
         try:
             pasta = self.pasta_trabalho / hashlib.sha1(a.id.encode()).hexdigest()[:12]
             caminho = self.fonte.baixar(a, pasta)
-            linhas = [] if a.tipo == "foto" else execucao.ler_linhas(str(caminho))
+            linhas, colunas = ([], []) if a.tipo == "foto" else execucao.ler_linhas_e_colunas(str(caminho))
         except Exception as exc:
             self._falhas[a.id] = a.assinatura
             self.ultimo_erro = f"ler {a.nome}: {type(exc).__name__}: {exc}"
@@ -235,6 +240,10 @@ class Vigia:
             log.info("foto recebida: %s", a.nome)
         else:
             self._linhas[a.id] = linhas
+            if colunas:
+                self._colunas[a.id] = (a.nome, colunas)
+            else:
+                self._colunas.pop(a.id, None)
             log.info("lido %s: %d linhas", a.nome, len(linhas))
         return True
 

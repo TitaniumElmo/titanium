@@ -61,9 +61,21 @@ def _erro(auditoria_id: Optional[str], funcionario_id: Optional[str], etapa: str
 
 
 def _ler(arquivo: str, auditoria_id: Optional[str], funcionario_id: Optional[str] = None) -> list[Linha]:
-    """extrair_ficha devolve list[Linha] ou {"linhas": [...], "mapeamento": ...}."""
+    return _ler_com_colunas(arquivo, auditoria_id, funcionario_id)[0]
+
+
+def _ler_com_colunas(arquivo: str, auditoria_id: Optional[str],
+                     funcionario_id: Optional[str] = None) -> tuple[list[Linha], list[dict]]:
+    """extrair_ficha devolve list[Linha] ou {"linhas": [...], "mapeamento": ...}.
+
+    Também devolve a tabela de colunas da planilha (mapeamento["colunas"], uma linha por
+    coluna, para a tela de Fontes); vazia para foto, PDF ou extrair_ficha sem a tabela."""
     bruto = com_retentativa(integracao.extrair_ficha, arquivo)
+    colunas: list[dict] = []
     if isinstance(bruto, dict):
+        mapeamento = bruto.get("mapeamento")
+        if isinstance(mapeamento, dict) and isinstance(mapeamento.get("colunas"), list):
+            colunas = mapeamento["colunas"]
         bruto = bruto.get("linhas", [])
     linhas = []
     for item in bruto or []:
@@ -71,12 +83,17 @@ def _ler(arquivo: str, auditoria_id: Optional[str], funcionario_id: Optional[str
             linhas.append(item if isinstance(item, Linha) else Linha.model_validate(item))
         except Exception as exc:  # linha fora do contrato: avisa no log, não some calada
             _erro(auditoria_id, funcionario_id, f"extrair_ficha({Path(arquivo).name})", exc)
-    return linhas
+    return linhas, colunas
 
 
 def ler_linhas(arquivo: str) -> list[Linha]:
-    """Lê um arquivo de ficha fora de uma auditoria (o vigia). Lança exceção se falhar."""
+    """Lê um arquivo de ficha fora de uma auditoria. Lança exceção se falhar."""
     return _ler(arquivo, None)
+
+
+def ler_linhas_e_colunas(arquivo: str) -> tuple[list[Linha], list[dict]]:
+    """Como ler_linhas, mais a tabela de colunas da planilha (o vigia mostra em GET /fontes)."""
+    return _ler_com_colunas(arquivo, None)
 
 
 def _achados(resultado: Any, auditoria_id: str) -> list[Achado]:
