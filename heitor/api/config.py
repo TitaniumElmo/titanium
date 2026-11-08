@@ -18,6 +18,25 @@ STUB_ATRASO_S = float(os.getenv("HEITOR_STUB_ATRASO", "0.3"))
 # Gatilho 1 (vigia da pasta). Drive tem prioridade sobre a pasta local.
 DRIVE_PASTA = os.getenv("HEITOR_DRIVE_PASTA") or None
 DRIVE_CREDENCIAIS = os.path.expanduser(os.getenv("HEITOR_DRIVE_CREDENCIAIS", "~/.config/heitor/drive.json"))
+
+
+def _credenciais_do_segredo() -> None:
+    """No deploy (Hugging Face Spaces) não há arquivo: a chave da conta de serviço vem inteira no
+    segredo HEITOR_DRIVE_CREDENCIAIS_JSON e é gravada num arquivo só do processo (permissão 600)."""
+    global DRIVE_CREDENCIAIS
+    conteudo = os.getenv("HEITOR_DRIVE_CREDENCIAIS_JSON", "").strip()
+    if not conteudo:
+        return
+    import tempfile
+
+    fd, caminho = tempfile.mkstemp(prefix="heitor-drive-", suffix=".json")
+    with os.fdopen(fd, "w") as f:
+        f.write(conteudo)
+    os.chmod(caminho, 0o600)
+    DRIVE_CREDENCIAIS = caminho
+
+
+_credenciais_do_segredo()
 FONTE_PASTA = os.getenv("HEITOR_FONTE_PASTA") or None
 VIGIA_INTERVALO_S = float(os.getenv("HEITOR_VIGIA_INTERVALO", "10"))
 
