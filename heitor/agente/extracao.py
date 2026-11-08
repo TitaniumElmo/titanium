@@ -350,7 +350,14 @@ def _ler_pdf(caminho: Path) -> dict[str, Any]:
     linhas: list[Linha] = []
     cabecalho: dict[str, Any] = {}
     custo, modelo = 0.0, None
-    paginas = paginas_do_pdf(caminho)
+    try:
+        paginas = paginas_do_pdf(caminho)
+    except Exception as e:  # noqa: BLE001 — PDF corrompido ou protegido: sem linhas; a pendência fica para uma pessoa
+        import logging
+
+        logging.getLogger(__name__).warning("PDF %s não abriu (%r): fica para conferência humana", caminho.name, e)
+        return {"linhas": [], "mapeamento": {"origem": "pdf", "modelo": None, "cabecalho": {}, "custo_usd": 0.0,
+                                             "paginas": 0, "erro": "PDF não abriu"}}
     for png in paginas:
         r = ler_foto(png)
         custo += r["custo_usd"]

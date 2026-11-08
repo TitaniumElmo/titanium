@@ -76,3 +76,11 @@ def test_documento_sem_ficha_fica_aguardando_e_nao_reabre(tmp_path, monkeypatch)
     assert r["status"] not in ("reaberta", "fechada")
     assert "conferência humana" in r["motivo"]
 
+
+
+def test_pdf_corrompido_volta_sem_linhas_em_vez_de_erro(tmp_path):
+    """RH manda um PDF que não abre: sem linhas (a pendência fica aguardando uma pessoa), nunca erro na tela."""
+    ruim = tmp_path / "nota.pdf"
+    ruim.write_bytes(b"%PDF-1.4\n%%EOF")
+    r = extrair_ficha(str(ruim))
+    assert r["linhas"] == [] and r["mapeamento"]["erro"] == "PDF não abriu"
