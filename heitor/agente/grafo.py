@@ -92,23 +92,6 @@ Responda SOMENTE com um objeto JSON, sem texto fora dele:
 {{"pensamento": "<uma frase curta em português: o que você decidiu e por quê>", "ferramenta": "<nome>", "args": {{...}}}}"""
 
 
-# Exames médicos (só com HEITOR_EXAMES=1; sem a flag, o pedido ao LLM é o mesmo de antes).
-PROMPT_EXAMES = """
-
-EXAMES MÉDICOS (ASO, NR-7):
-- auditar_ficha já traz os exames em "exames_aso": decida EPI e exame juntos, antes de criar pendências.
-  Ficha de EPI sem falhas não encerra a auditoria se houver achado de exame.
-- Urgência é sua decisão: ASO inapto ou periódico vencido em quem trabalha exposto a agente nocivo
-  ("risco_da_funcao" diferente de nenhum): prazo_dias 1 ou 2. Sem agente nocivo: 5 a 10.
-- Uma ida só do técnico: se a mesma pessoa tem achado de exame e achado de EPI para o técnico
-  ("epi_sem_pendencia"), crie UMA pendência para os dois: achado_id de um e "tambem": [id do outro]. A ação diz
-  as duas coisas e por quê. Ex.: "Agendar o periódico do Marcos e entregar o protetor auricular: o exame
-  venceu em 09/2026 e a última troca passou da vida útil."
-- ASO inapto: a conduta é do médico do trabalho. Nunca mande afastar, demitir ou mudar de função por conta própria."""
-if F.aso_ligado():
-    PROMPT_SISTEMA = PROMPT_SISTEMA.replace("\n\nResponda SOMENTE com um objeto JSON", PROMPT_EXAMES + "\n\nResponda SOMENTE com um objeto JSON", 1)
-
-
 # ----------------------------------------------------------- execução ---
 
 class Compartilhado:
@@ -255,8 +238,6 @@ def politica_deterministica(exe: Execucao) -> dict[str, Any]:
     if ctx.foto and not ctx.papel_conferido:
         return {"ferramenta": "conferir_ficha_de_papel", "args": {},
                 "pensamento": "sem o LLM, confiro sempre a ficha de papel quando há foto (opção segura)"}
-    if F.aso_ligado() and not ctx.aso_auditado:
-        return {"ferramenta": "auditar_aso", "args": {}, "pensamento": "conferir os exames médicos (ASO)"}
     for a in ctx.achados_do_funcionario():
         if precisa_pendencia(ctx, a):
             return {"ferramenta": "criar_pendencia", "args": {"achado_id": a["id"]},
@@ -374,9 +355,6 @@ def construir_grafo(exe: Execucao, com_consolidacao: bool = True):
             r = F.executar("conferir_ficha_de_papel", {}, ctx)
             exe.evento("conferir_ficha_de_papel", {}, r.saida,
                        pensamento="guarda-corpo: há foto da ficha de papel e ela não foi conferida; só o papel prova a assinatura")
-        if F.aso_ligado() and not ctx.aso_auditado:
-            r = F.executar("auditar_aso", {}, ctx)
-            exe.evento("auditar_aso", {}, r.saida, pensamento="guarda-corpo: exames médicos (ASO) não conferidos")
         # Falhas que o agente deixou sem pendência: a mesma ação vira UMA pendência listando as linhas
         # (5 avisos "colher assinatura nas próximas entregas" para o mesmo funcionário viram 1).
         grupos: dict[tuple, list[Achado]] = {}

@@ -105,36 +105,6 @@ _TEXTOS: dict[str, dict[str, Any]] = {
                       "do MTE. Pode ser erro de leitura da foto ou erro de registro; o técnico confere no papel.",
         "base": [],
     },
-    "aso_ausente": {
-        "titulo": "Funcionário ativo sem ASO",
-        "explicacao": "Não há nenhum Atestado de Saúde Ocupacional registrado para quem está trabalhando. O exame corrige daqui para frente.",
-        "base": ["NR-7: o empregador deve garantir os exames médicos ocupacionais (admissional, periódico, mudança de risco, retorno e demissional)."],
-    },
-    "aso_periodico_vencido": {
-        "titulo": "Exame periódico vencido",
-        "explicacao": "O último ASO passou da periodicidade definida no PCMSO. Agendar o exame corrige.",
-        "base": ["NR-7: o empregador deve garantir os exames médicos ocupacionais (admissional, periódico, mudança de risco, retorno e demissional)."],
-    },
-    "aso_sem_medico": {
-        "titulo": "ASO sem nome ou CRM do médico",
-        "explicacao": "Sem a identificação do médico, o ASO perde valor como prova. A clínica pode ter a via completa.",
-        "base": ["NR-7: o empregador deve garantir os exames médicos ocupacionais (admissional, periódico, mudança de risco, retorno e demissional)."],
-    },
-    "aso_sem_assinatura_medico": {
-        "titulo": "ASO sem assinatura do médico",
-        "explicacao": "Sem a assinatura do médico, o ASO não prova o exame. A clínica pode ter a via assinada.",
-        "base": ["NR-7: o empregador deve garantir os exames médicos ocupacionais (admissional, periódico, mudança de risco, retorno e demissional)."],
-    },
-    "aso_admissional_tardio": {
-        "titulo": "Exame admissional depois do início",
-        "explicacao": "O admissional deve ser feito antes de o trabalhador assumir a função. O período já passou: fica como passivo.",
-        "base": ["NR-7: o empregador deve garantir os exames médicos ocupacionais (admissional, periódico, mudança de risco, retorno e demissional)."],
-    },
-    "aso_inapto_em_atividade": {
-        "titulo": "ASO inapto e funcionário em atividade",
-        "explicacao": "O último ASO diz inapto e não há novo ASO apto. A conduta é do médico do trabalho.",
-        "base": ["NR-7: o empregador deve garantir os exames médicos ocupacionais (admissional, periódico, mudança de risco, retorno e demissional)."],
-    },
     "funcao_desconhecida": {
         "titulo": "Função fora da tabela função → EPI",
         "explicacao": "Não foi possível saber quais EPIs a função exige. Precisa de revisão manual.",
