@@ -11,6 +11,50 @@ Anotação para retomar o trabalho depois de limpar a conversa com o Claude. Jun
 
 ---
 
+## 0. Pendências por pessoa (revisão de 08/11, madrugada; `main` em `7aa3125`, PRs até o #15)
+
+Estado da `main`: `scripts/antes_do_pr.sh` → 181 passed com a base. Sem a base, 7 testes do PGR falham até o **PR #22** entrar. Concorrência: 18 auditorias, 6 simultâneas, sem erro. Princípios 1, 2, 4, 5, 6, 7 e 8 do CLAUDE.md verificados; **o 3 (fraude) tem furo**: ver Sofia.
+
+### Pierre (API, deploy)
+- [ ] **Antes do deploy:** token nas rotas que alteram dados; `POST /demo/reset` só com `HEITOR_DEMO=1`; limite de upload (15 MB; só CSV/JPG/PNG/WEBP).
+- [ ] **Deploy:** escolher Hugging Face Spaces (grátis, 16 GB, código visível) ou Railway (~US$ 5/mês). Levar a base CAEPI (144 MB, fora do Git) e os segredos (Featherless, chave do Drive, Gmail). A API usa ~400 MB.
+- [ ] Mergear o **#22** (testes do PGR sem a base) ou pedir ao Gustavo.
+- [ ] **Gatilho 7:** resumo diário (o e-mail agrupado já existe; dá para reaproveitar).
+- [ ] Aquecer o LLM quando o servidor sobe (a primeira chamada leva ~20 s).
+- [ ] Demo: `HEITOR_VIGIA_INTERVALO=3`; `construtora_ficticia.csv` na pasta do Drive, com a coluna de matrícula formatada como texto.
+- [ ] Opcional: custo da leitura de foto no log; guardar o estado em arquivo.
+
+### Sofia (agente, relatório)
+- [ ] **Filtro de fraude não pega fraude** (`heitor/agente/ferramentas.py`, `_FRAUDE`), **bloqueia a demo**. Não barrou nenhuma de 5 frases fraudulentas, por exemplo "Colher a assinatura do Rafael na ficha antiga" e "Preencher o CA que falta na entrega de setembro/2023". A expressão procura "assinar" (o LLM escreve "assinatura") e exige "antiga/passada" (o LLM cita datas). O texto do LLM vai para a **tela**. → Cobrir os radicais `assin*`, `preench*`, `alter*`, `complet*`, `regulariz*` perto de `antig*`, `passad*`, `retroativ*`, `anterior*`, de uma data ou de "entrega de…"; testar com as 5 frases e com as 2 legítimas ("colher a assinatura nas próximas entregas", "entregar hoje e colher a assinatura").
+- [ ] Caminho do servidor na evidência (`_falha_vira_revisao` põe a exceção no achado: "base CAEPI não encontrada em /Users/…"). → Só o tipo do erro; o detalhe vai para o log.
+- [ ] `requirements.txt`: tirar `pandas` e `langfuse` (sem uso). `onnxruntime` e `numpy` só servem ao `tests/avaliar_yolo.py`.
+- [ ] Linha malformada (tudo na coluna A) vira acusação. → Marcar como "linha incompleta, revisar".
+- [ ] Planilha e fotos da demo (`construtora_ficticia.csv`, `fotos_teste/`) num lugar que o time e o deploy alcancem.
+
+### Gustavo (regras, base, PGR)
+- [ ] Revisar e mergear o **#22** (só marca 2 testes do PGR para pular sem a base).
+- [ ] `HEITOR_PRAZO_TESTE` esquecido no servidor faz todas as pendências vencerem de uma vez. → Aviso no log quando a variável estiver ligada.
+- [ ] Regra para linha sem data (hoje passa sem achado; a validade do CA não é checada).
+- [ ] Responder a pergunta do #19: com o PGR ligado, o intervalo entre entregas de EPI de **acidente** também vira `troca_passado`?
+
+### Luciana (tela)
+- [ ] Ainda não há branch de frontend no GitHub. Subir o que tiver, mesmo incompleto.
+- [ ] O que mudou na API para a tela:
+  - `disparado_por` agora é um código (`alteracao_planilha`, `upload`, `manual`, `prazo_vencido`, `rotina`), e o texto vai em `descricao_disparo`;
+  - o feed é `GET /eventos`, e os eventos `edicao_detectada` vêm com `auditoria_id: "vigia"`;
+  - a pendência tem `prioridade`, `cobrancas`, `escalada`, `funcionario_nome` e `historico[].etapa/ator`;
+  - cada evento de ferramenta traz `saida.resumo` (uma linha em português).
+- [ ] Precisa do link do deploy para testar fora da máquina do Pierre.
+
+### Time (decisões)
+- [ ] Plataforma do deploy.
+- [ ] Treinamento: entra na demo (com qual fonte?) ou sai do pitch?
+- [ ] Assinatura vazia em planilha digitada: irregular ou risco?
+- [ ] Demo ao vivo com quantos funcionários (com LLM, 15 a 40 s para 1 ou 2).
+- [ ] `HEITOR_PRAZO_TESTE` **nunca** ligado na demo.
+
+---
+
 ## 1. Onde as coisas estão
 
 | Item | Estado |
