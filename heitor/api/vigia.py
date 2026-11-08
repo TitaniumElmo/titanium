@@ -168,6 +168,10 @@ class Vigia:
                 return {"mudou": False, "aguardando_confirmar": len(self._candidatos)}
 
             mudaram = self._funcionarios_que_mudaram()
+            if self._parar.is_set():
+                # Este vigia foi parado (troca de pasta) no meio da verificação: não cria auditoria da
+                # pasta antiga, que cairia no estado da pasta nova.
+                return {"mudou": False, "parado": True}
             if not mudaram:
                 return {"mudou": False, "arquivos": [a.nome for a in lidos], "funcionarios": []}
 
@@ -373,6 +377,7 @@ def conciliar(auditoria_id: str, linhas: list[Linha]) -> list[dict[str, str]]:
 vigia: Optional[Vigia] = None
 personalizada = False  # True quando o time trocou a pasta pela API (POST /fontes); False = a do .env
 _troca = threading.Lock()
+_ESPERA_VIGIA_ANTIGO_S = 90.0  # tempo máximo esperando a verificação em curso do vigia antigo terminar
 
 
 def fonte_da_config() -> Optional[Fonte]:
@@ -415,7 +420,15 @@ def trocar_fonte(fonte: Fonte, *, da_config: bool = False) -> Vigia:
     with _troca:
         antigo = vigia
         if antigo:
-            antigo.parar()  # espera a verificação em curso terminar
+            antigo.parar()
+            # parar() espera a thread só 5 s; uma verificação do Drive pode demorar mais. Esperar o
+            # lock garante que ela terminou (ela vê o sinal de parada antes de criar auditoria) e que
+            # nada dela é gravado depois da limpeza abaixo.
+            if antigo._lock.acquire(timeout=_ESPERA_VIGIA_ANTIGO_S):
+                antigo._lock.release()
+            else:
+                log.warning("vigia antigo ainda verificando após %ss; segue a troca (ele não cria mais auditorias)",
+                            _ESPERA_VIGIA_ANTIGO_S)
         estado.limpar()
         novo = Vigia(fonte, antigo.intervalo_s if antigo else config.VIGIA_INTERVALO_S)
         vigia, personalizada = novo, not da_config

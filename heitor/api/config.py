@@ -52,6 +52,13 @@ def token_admin() -> str:
     return os.getenv("HEITOR_TOKEN_ADMIN", "").strip()
 
 
+def em_deploy() -> bool:
+    """Rodando no servidor público (Railway, ou HEITOR_PRODUCAO=1). Lá, sem token, as rotas de
+    administração ficam fechadas em vez de liberadas."""
+    return bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID")) or (
+        os.getenv("HEITOR_PRODUCAO", "").lower() in ("1", "true", "sim"))
+
+
 def modo_demo() -> bool:
     """POST /demo/reset só existe com HEITOR_DEMO=1."""
     return os.getenv("HEITOR_DEMO", "").strip().lower() in ("1", "true", "sim", "on")

@@ -34,6 +34,10 @@ class Estado:
 
     def limpar(self) -> None:
         with self._lock:
+            # Cada limpeza (reset da demo, troca de pasta) começa uma geração nova do log. O feed SSE
+            # manda a geração no id do evento: quem reconecta com um id da geração antiga lê do zero
+            # em vez de esperar o log novo passar da posição antiga (o feed ficaria mudo).
+            self._geracao = getattr(self, "_geracao", 0) + 1
             self._removidas |= set(getattr(self, "_auditorias", {}))
             self._auditorias: dict[str, Auditoria] = {}
             self._linhas: dict[str, list[Linha]] = {}
@@ -158,6 +162,10 @@ class Estado:
             if self._aceita(evento.auditoria_id, "evento"):
                 self._eventos[evento.auditoria_id].append(evento.model_copy(deep=True))
                 self._log.append(evento.model_copy(deep=True))
+
+    def geracao(self) -> int:
+        with self._lock:
+            return self._geracao
 
     def log_desde(self, inicio: int = 0) -> list[Evento]:
         """Todos os eventos de todas as auditorias, na ordem em que chegaram."""
