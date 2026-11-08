@@ -1,4 +1,4 @@
-import { useId, useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { agora, useAgora, useMundo, useProximaLeitura } from "../api";
 import { BotaoLink, EstadoVazio } from "../componentes/base";
@@ -54,138 +54,168 @@ function comoResolver(p: Pendencia): string {
 
 type TomSituacao = "alerta" | "atencao" | "ok";
 
-const TONS: Record<TomSituacao, { selo: string; traco: string; texto: string; brilho: string }> = {
-  alerta: { selo: "bg-irregular-fundo text-irregular", traco: "text-irregular-borda", texto: "text-irregular", brilho: "hover:border-irregular-borda/50" },
-  atencao: { selo: "bg-risco-fundo text-risco", traco: "text-risco-borda", texto: "text-risco", brilho: "hover:border-risco-borda/50" },
-  ok: { selo: "bg-ok-fundo text-ok", traco: "text-ok-borda", texto: "text-ok", brilho: "hover:border-ok-borda/50" },
+const SELOS: Record<TomSituacao, string> = {
+  alerta: "bg-irregular-fundo text-irregular",
+  atencao: "bg-risco-fundo text-risco",
+  ok: "bg-ok-fundo text-ok",
 };
 
-const OSCILACAO = [0, 0.6, -0.4, 0.5, -0.3, 0.2, 0];
-const LARGURA_GRAFICO = 100;
-const ALTURA_GRAFICO = 32;
+const QUADRADO_ACESO: Record<TomSituacao, string> = {
+  alerta: "bg-irregular-borda",
+  atencao: "bg-risco-borda",
+  ok: "bg-ok-borda",
+};
 
-function tendencia(valor: number, inicio: number): number[] {
-  return OSCILACAO.map((o, i, todos) => {
-    const t = i / (todos.length - 1);
-    const base = inicio + (valor - inicio) * t;
-    return i === todos.length - 1 ? valor : Math.max(0, base + o);
-  });
-}
+const MAXIMO_QUADRADOS = 24;
 
-function MiniGrafico({ serie, descricao, className }: { serie: number[]; descricao: string; className?: string }) {
-  const id = useId();
-  const menor = Math.min(...serie);
-  const maior = Math.max(...serie);
-  const faixa = maior - menor || 1;
-  const pontos = serie.map((v, i) => {
-    const x = (i / (serie.length - 1)) * LARGURA_GRAFICO;
-    const y = maior === menor ? ALTURA_GRAFICO / 2 : 4 + (1 - (v - menor) / faixa) * (ALTURA_GRAFICO - 8);
-    return [x, y] as const;
-  });
-  const linha = pontos.reduce((d, [x, y], i, todos) => {
-    if (i === 0) return `M${x} ${y}`;
-    const [px, py] = todos[i - 1] ?? [x, y];
-    const meio = (px + x) / 2;
-    return `${d} C${meio} ${py} ${meio} ${y} ${x} ${y}`;
-  }, "");
-  const ultimo = pontos[pontos.length - 1] ?? [LARGURA_GRAFICO, ALTURA_GRAFICO / 2];
+function Seta() {
   return (
-    <div role="img" aria-label={descricao} className={cn("pointer-events-none absolute inset-x-0 bottom-0 h-14 sm:h-16", className)}>
-      <svg viewBox={`0 0 ${LARGURA_GRAFICO} ${ALTURA_GRAFICO}`} preserveAspectRatio="none" className="size-full">
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {[10, 21].map((y) => (
-          <line key={y} x1="0" x2={LARGURA_GRAFICO} y1={y} y2={y} stroke="var(--borda)" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
-        ))}
-        <path d={`${linha} L${LARGURA_GRAFICO} ${ALTURA_GRAFICO} L0 ${ALTURA_GRAFICO} Z`} fill={`url(#${id})`} />
-        <path
-          d={linha}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-          className="animar-traco"
-        />
-      </svg>
-      <span
-        className="absolute size-2 -translate-x-full -translate-y-1/2 rounded-full bg-current ring-4 ring-superficie"
-        style={{ left: "100%", top: `${(ultimo[1] / ALTURA_GRAFICO) * 100}%`, marginLeft: -4 }}
-      />
-    </div>
+    <svg aria-hidden viewBox="0 0 24 24" className="size-5 shrink-0 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
   );
 }
 
-function Situacao({ semProtecao, aguardandoRh, emDia, total }: { semProtecao: number; aguardandoRh: number; emDia: number; total: number }) {
+function Quadradinhos({ acesos, total, tom }: { acesos: number; total: number; tom: TomSituacao }) {
+  const quantidade = Math.min(total, MAXIMO_QUADRADOS);
+  const ligados = total > MAXIMO_QUADRADOS ? Math.round((acesos / total) * MAXIMO_QUADRADOS) : acesos;
+  return (
+    <span aria-hidden className="grid grid-cols-6 gap-1 sm:grid-cols-12 sm:gap-1.5">
+      {Array.from({ length: quantidade }, (_, i) => (
+        <span key={i} className={cn("aspect-square rounded-[3px]", i < ligados ? QUADRADO_ACESO[tom] : "bg-borda")} />
+      ))}
+    </span>
+  );
+}
+
+function listaDeNomes(nomes: string[]): string {
+  const primeiros = [...new Set(nomes.map((n) => n.split(" ")[0] ?? n))];
+  if (primeiros.length <= 3) return primeiros.length > 1 ? `${primeiros.slice(0, -1).join(", ")} e ${primeiros[primeiros.length - 1]}` : (primeiros[0] ?? "");
+  return `${primeiros.slice(0, 2).join(", ")} e mais ${primeiros.length - 2}`;
+}
+
+function Situacao({
+  semProtecao,
+  aguardandoRh,
+  emDia,
+  total,
+  nomesSemProtecao,
+  nomesRh,
+}: {
+  semProtecao: number;
+  aguardandoRh: number;
+  emDia: number;
+  total: number;
+  nomesSemProtecao: string[];
+  nomesRh: string[];
+}) {
   const itens: {
     valor: string | number;
     rotulo: string;
     status: string;
+    detalhe?: string;
+    acao: string;
     para: string;
     tom: TomSituacao;
+    destaque: boolean;
     icone: typeof IconeAlerta;
-    serie: number[];
-    resumo: string;
+    medidor?: { acesos: number; total: number };
   }[] = [
     {
       valor: semProtecao,
       rotulo: semProtecao === 1 ? "trabalhador sem proteção hoje" : "trabalhadores sem proteção hoje",
       status: semProtecao > 0 ? "Urgente" : "Tudo certo",
+      detalhe: semProtecao > 0 ? listaDeNomes(nomesSemProtecao) : undefined,
+      acao: "Ver pendências",
       para: "/pendencias",
       tom: semProtecao > 0 ? "alerta" : "ok",
+      destaque: semProtecao > 0,
       icone: IconeAlerta,
-      serie: tendencia(semProtecao, semProtecao + 3),
-      resumo: `${semProtecao + 3} para ${semProtecao}`,
     },
     {
       valor: aguardandoRh,
       rotulo: aguardandoRh === 1 ? "documento aguardando o RH" : "documentos aguardando o RH",
       status: aguardandoRh > 0 ? "Aguardando" : "Tudo certo",
+      detalhe: aguardandoRh > 0 ? listaDeNomes(nomesRh) : undefined,
+      acao: "Ver pedidos ao RH",
       para: "/pendencias",
       tom: aguardandoRh > 0 ? "atencao" : "ok",
+      destaque: false,
       icone: IconeDocumento,
-      serie: tendencia(aguardandoRh, aguardandoRh + 2),
-      resumo: `${aguardandoRh + 2} para ${aguardandoRh}`,
     },
     {
       valor: `${emDia} de ${total}`,
       rotulo: "fichas em dia",
       status: emDia === total ? "Em dia" : "Atenção",
+      acao: "Ver funcionários",
       para: "/funcionarios",
       tom: emDia === total ? "ok" : "atencao",
+      destaque: false,
       icone: IconeLista,
-      serie: tendencia(emDia, Math.max(0, emDia - 3)),
-      resumo: `${Math.max(0, emDia - 3)} para ${emDia}`,
+      medidor: { acesos: emDia, total },
     },
   ];
   return (
     <section aria-label="Situação hoje" className="grid grid-cols-3 gap-2 sm:gap-3">
       {itens.map((i) => {
-        const tom = TONS[i.tom];
         const Icone = i.icone;
         return (
           <Link
             key={i.rotulo}
             to={i.para}
             className={cn(
-              "group relative flex min-h-48 flex-col gap-3 overflow-hidden rounded-cartao border border-borda bg-superficie p-3 pb-16 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento sm:min-h-56 sm:gap-4 sm:p-5 sm:pb-20",
-              tom.brilho,
+              "group relative flex min-w-0 flex-col justify-between overflow-hidden rounded-cartao border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento ",
+              i.destaque
+                ? "border-borda bg-gradient-to-b from-cartao-urgente-topo via-cartao-urgente-meio to-cartao-urgente-base hover:border-fraco"
+                : "border-borda bg-superficie bg-[radial-gradient(120%_90%_at_100%_0%,var(--cartao-brilho),transparent_60%)] hover:border-fraco",
             )}
           >
-            <span className={cn("relative z-10 hidden text-xs font-medium sm:block", tom.texto)}>{i.status}</span>
-            <span className={cn("relative z-10 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 sm:gap-2.5 sm:px-4 sm:py-2", tom.selo)}>
-              <Icone className="size-4 shrink-0 sm:size-5" aria-hidden />
-              <span className="whitespace-nowrap text-lg font-semibold tabular-nums sm:text-3xl sm:leading-none">{i.valor}</span>
+            <span className="flex flex-col gap-2 p-3 sm:gap-3 sm:p-6">
+              <span className={cn("hidden text-sm font-semibold uppercase tracking-sobrescrito sm:block", i.destaque ? "text-irregular" : "text-apoio")}>{i.status}</span>
+              <span className={cn("inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 sm:gap-2.5 sm:px-4 sm:py-2", i.destaque ? "bg-selo-claro text-selo-claro-texto" : SELOS[i.tom])}>
+                <Icone className="size-4 shrink-0 sm:size-5" aria-hidden />
+                <span className="whitespace-nowrap text-base font-semibold tabular-nums sm:text-3xl sm:leading-none">{i.valor}</span>
+              </span>
+              <span className={cn("text-xs font-medium leading-snug sm:text-base", "text-texto")}>{i.rotulo}</span>
+              {i.detalhe && <span className={cn("hidden text-sm leading-snug sm:block", "text-apoio")}>{i.detalhe}</span>}
+              {i.medidor && <Quadradinhos acesos={i.medidor.acesos} total={i.medidor.total} tom={i.tom} />}
             </span>
-            <span className="relative z-10 text-xs leading-snug text-apoio sm:text-sm">{i.rotulo}</span>
-            <MiniGrafico serie={i.serie} descricao={`${i.rotulo}: tendência ilustrativa dos últimos 7 dias, de ${i.resumo}`} className={tom.traco} />
+            <span
+              className={cn(
+                "flex items-center justify-end gap-2 border-t px-3 py-2.5 text-sm font-medium sm:justify-between sm:px-6 sm:py-3.5 sm:text-base",
+                "border-borda bg-superficie-2/60 text-texto",
+              )}
+            >
+              <span className="hidden sm:inline">{i.acao}</span>
+              <Seta />
+            </span>
           </Link>
         );
       })}
+    </section>
+  );
+}
+
+function AtalhoOperacional() {
+  return (
+    <section
+      aria-label="Atalho operacional"
+      className="flex flex-col gap-4 rounded-cartao border border-borda bg-superficie bg-[radial-gradient(90%_140%_at_100%_0%,var(--atalho-brilho),transparent_60%),linear-gradient(135deg,var(--atalho-topo)_0%,var(--atalho-base)_100%)] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"
+    >
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-semibold uppercase tracking-sobrescrito text-apoio">Atalho Operacional</span>
+        <h2 className="text-h3">Gerar Relatório Semanal consolidado</h2>
+        <p className="text-sm text-apoio sm:text-base">Achados, pendências e exposição da semana em um só arquivo.</p>
+      </div>
+      <Link
+        to="/relatorio?pdf=1"
+        className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-selo-claro px-5 text-base font-semibold text-selo-claro-texto transition-colors hover:bg-selo-claro-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento"
+      >
+        <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />
+        </svg>
+        Baixar PDF
+      </Link>
     </section>
   );
 }
@@ -258,7 +288,8 @@ export function Inicio() {
         return peso(a) - peso(b) || a.prazo.localeCompare(b.prazo);
       });
     const doRh = abertas.filter((p) => p.destino === "rh").sort((a, b) => a.prazo.localeCompare(b.prazo));
-    const semProtecao = new Set(doTecnico.filter((p) => p.prazo < hoje || ehUrgente(p, hoje)).map((p) => p.funcionario_id)).size;
+    const urgentes = doTecnico.filter((p) => p.prazo < hoje || ehUrgente(p, hoje));
+    const semProtecao = new Set(urgentes.map((p) => p.funcionario_id)).size;
     const funcionarios = resumoFuncionarios(mundo, hoje);
     const base = new Date(`${hoje}T12:00:00`).getTime();
     const proximos = cronograma(mundo, hoje, hoje, isoDia(base + 7 * DIA)).filter(
@@ -270,6 +301,8 @@ export function Inicio() {
       doTecnico,
       doRh,
       semProtecao,
+      nomesSemProtecao: urgentes.map((p) => p.funcionario_nome),
+      nomesRh: doRh.map((p) => p.funcionario_nome),
       emDia: funcionarios.filter((f) => f.status === "ok").length,
       total: funcionarios.length,
       proximos,
@@ -318,7 +351,14 @@ export function Inicio() {
         </Link>
       }
     >
-      <Situacao semProtecao={dados.semProtecao} aguardandoRh={dados.doRh.length} emDia={dados.emDia} total={dados.total} />
+      <Situacao
+        semProtecao={dados.semProtecao}
+        aguardandoRh={dados.doRh.length}
+        emDia={dados.emDia}
+        total={dados.total}
+        nomesSemProtecao={dados.nomesSemProtecao}
+        nomesRh={dados.nomesRh}
+      />
 
       <section className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between gap-3">
@@ -346,6 +386,8 @@ export function Inicio() {
           </Link>
         )}
       </section>
+
+      <AtalhoOperacional />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="flex flex-col gap-2 rounded-cartao border border-borda bg-superficie p-4">

@@ -15,6 +15,12 @@
   --color-acento-forte: var(--acento-forte);
   --color-acento-suave: var(--acento-suave);
   --color-destaque-claro: var(--destaque-claro);
+  --color-cartao-urgente-topo: var(--cartao-urgente-topo);
+  --color-cartao-urgente-meio: var(--cartao-urgente-meio);
+  --color-cartao-urgente-base: var(--cartao-urgente-base);
+  --color-selo-claro: var(--selo-claro);
+  --color-selo-claro-texto: var(--selo-claro-texto);
+  --color-selo-claro-hover: var(--selo-claro-hover);
   --background-image-destaque: var(--gradiente-destaque);
   --background-image-destaque-area: var(--gradiente-area);
   --background-image-cartao: var(--gradiente-cartao);
@@ -90,16 +96,23 @@
   --breakpoint-menu: 900px;
 }
 
+html {
+  font-size: 100%;
+}
+
 html,
 body {
   background: var(--fundo);
   color: var(--texto);
   font-family: var(--fonte-sans);
-  font-size: var(--tamanho-16);
   font-weight: var(--peso-normal);
   line-height: var(--altura-corpo);
   letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-size: var(--tamanho-16);
 }
 
 table,
@@ -340,5 +353,37 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  aside,
+  nav,
+  header.menu\:hidden,
+  [data-nao-imprimir] {
+    display: none !important;
+  }
+
+  main {
+    padding-left: 0 !important;
+  }
+
+  :root,
+  :root[data-tema="escuro"],
+  :root[data-tema="claro"] {
+    --fundo: #ffffff;
+    --superficie: #ffffff;
+    --superficie-2: #f5f5f5;
+    --borda: #d9d9d9;
+    --texto: #111111;
+    --texto-apoio: #333333;
+    --texto-fraco: #555555;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
