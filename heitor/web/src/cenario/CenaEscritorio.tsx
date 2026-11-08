@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { dolares } from "../formato";
 import type { Evento } from "../tipos";
 import { cn } from "../util";
+import { CABINES, type Cabine, ContornoAtivo, Divisorias, Escurecimento, FundoCabines, NumeroDoChao, PlacaCabine } from "./Cabines";
 import { larguraTexto, TextoPixel } from "./TextoPixel";
 
 const LARGURA = 540;
@@ -9,20 +10,21 @@ const ALTURA = 180;
 const PES_CORREDOR = 174;
 const PES_MESA = 138;
 const ESPERA_OCIOSA_MS = 3000;
-const DISTANCIA_MINIMA = 42;
+const DISTANCIA_MINIMA = 40;
+const TOLERANCIA_FILEIRA = 20;
 const PASSO_AO_LADO = 42;
 const LIMITE_ESQUERDO = 24;
 const LIMITE_DIREITO = 514;
 const ENTRADA_ELMOS = [26, 74, 122];
-const PORTA_E = 472;
+const PORTA_E = 478;
 const PORTA_D = 395;
 const LUGAR_ENGENHEIRO = 377;
 const MESA_TECNICA = 420;
 const PES_TECNICA_MESA = 134;
 const SAIDA_MESA = 466;
 const LADO_OPERARIA = 478;
-const POSICAO_OPERARIA = 514;
-const POSICAO_RH = 334;
+const POSICAO_OPERARIA = 518;
+const POSICAO_RH = 340;
 const TEXTO_AGUARDANDO = "AGUARDANDO:\ncorreção na planilha";
 const RECORTE_MESA_D = "inset(88px 78px 40px 404px)";
 const ENGENHEIRO_PRESENTE_MS = 4000;
@@ -37,16 +39,7 @@ function arte(caminho: string): string {
   return URLS[`../assets/cenario/${caminho}`] ?? "";
 }
 
-type Cabine = "A" | "B" | "C" | "F" | "D" | "E";
-const CABINES: { id: Cabine; x: number; nome: string }[] = [
-  { id: "A", x: 60, nome: "A PLANILHA" },
-  { id: "B", x: 140, nome: "B AUDITORIA" },
-  { id: "C", x: 220, nome: "C FICHA PAPEL" },
-  { id: "F", x: 300, nome: "F RH" },
-  { id: "D", x: 380, nome: "D TECNICO" },
-  { id: "E", x: 460, nome: "E CANTEIRO" },
-];
-const PONTO_ELMO: Record<Cabine, number> = { A: 122, B: 180, C: 254, F: 292, D: 378, E: PORTA_E };
+const PONTO_ELMO: Record<Cabine, number> = { A: 100, B: 180, C: 260, F: 340, D: 420, E: PORTA_E };
 
 type Personagem =
   | "01_elmo"
@@ -170,20 +163,15 @@ function nivelBandeja(auditadas: number): number {
 
 function useEscuro(): boolean {
   const ler = () => {
-    const tema = document.documentElement.dataset.tema;
-    if (tema) return tema === "escuro";
-    return !window.matchMedia("(prefers-color-scheme: light)").matches;
+    return document.documentElement.dataset.tema !== "claro";
   };
   const [escuro, setEscuro] = useState(ler);
   useEffect(() => {
     const atualizar = () => setEscuro(ler());
     const obs = new MutationObserver(atualizar);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-tema"] });
-    const mq = window.matchMedia("(prefers-color-scheme: light)");
-    mq.addEventListener("change", atualizar);
     return () => {
       obs.disconnect();
-      mq.removeEventListener("change", atualizar);
     };
   }, []);
   return escuro;
@@ -304,7 +292,7 @@ export function CenaEscritorio({
 
   const posicoesDosOutros = (id: string) =>
     Object.entries(atores.current)
-      .filter(([outro, a]) => outro !== id && a.visivel)
+      .filter(([outro, a]) => outro !== id && a.visivel && Math.abs(a.pesY - (atores.current[id]?.pesY ?? PES_CORREDOR)) < TOLERANCIA_FILEIRA)
       .map(([, a]) => (a.andando ? a.alvoX : a.x));
 
   const livre = (id: string, desejado: number) => {
@@ -630,6 +618,10 @@ export function CenaEscritorio({
       <div className="relative mx-auto" style={{ width: LARGURA * escala, height: ALTURA * escala }}>
         <div className="absolute left-0 top-0 origin-top-left" style={{ width: LARGURA, height: ALTURA, transform: `scale(${escala})` }}>
           <Img src={arte(escuro ? "fundo_escuro.png" : "fundo_claro.png")} x={0} y={0} z={0} />
+          <FundoCabines />
+          {CABINES.map((c) => (
+            <NumeroDoChao key={c.id} cabine={c.id} />
+          ))}
           <Img src={arte("props_tras.png")} x={0} y={0} className={escuro ? "brightness-[.85]" : undefined} />
           {gaveta && <Img src={arte("estados/A_gaveta_aberta.png")} x={70} y={94} />}
           {nivelBandeja(auditadas) > 0 && <Img src={arte(`estados/B_bandeja_${nivelBandeja(auditadas)}.png`)} x={200} y={102} />}
@@ -659,20 +651,17 @@ export function CenaEscritorio({
             />
           ))}
 
-          {CABINES.map((c) => {
-            const acesa = c.id === cabineAtiva;
-            return (
-              <div key={c.id}>
-                <Img src={arte(acesa ? "estados/placa_acesa.png" : "estados/placa_apagada.png")} x={c.x + 4} y={5} z={6} />
-                <TextoPixel
-                  texto={c.nome}
-                  x={c.x + 4 + Math.floor((72 - larguraTexto(c.nome)) / 2)}
-                  y={10}
-                  cor={acesa ? "var(--cena-placa-acesa)" : "var(--cena-placa-apagada)"}
-                />
-              </div>
-            );
-          })}
+          <Divisorias />
+          <Escurecimento ativa={cabineAtiva} rodando={rodando} />
+          <ContornoAtivo ativa={cabineAtiva} rodando={rodando} />
+          {CABINES.map((c) => (
+            <PlacaCabine
+              key={c.id}
+              cabine={c.id}
+              acesa={rodando && c.id === cabineAtiva}
+              imagem={arte(rodando && c.id === cabineAtiva ? "estados/placa_acesa.png" : "estados/placa_apagada.png")}
+            />
+          ))}
           <Img src={arte("estados/contador_fichas.png")} x={3} y={54} z={6} />
           <TextoPixel texto={textoContador} x={3 + Math.floor((44 - larguraTexto(textoContador)) / 2)} y={57} cor="var(--cena-contador)" />
 
