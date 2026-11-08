@@ -29,6 +29,25 @@ MIME_PLANILHA_GOOGLE = "application/vnd.google-apps.spreadsheet"
 _MIME_EXTENSAO = {"text/csv": ".csv", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
 
+MIME_PASTA_GOOGLE = "application/vnd.google-apps.folder"
+
+
+def id_da_pasta(texto: str) -> str:
+    """Id da pasta do Drive a partir do link colado na tela (ou do próprio id).
+
+    Aceita drive.google.com/drive/folders/<id> (com /u/0/, ?usp=...), open?id=<id> e o id puro.
+    Link de arquivo (planilha, documento) não serve: o vigia observa uma pasta."""
+    t = (texto or "").strip()
+    if re.search(r"/(spreadsheets|document|presentation)/d/|/file/d/", t):
+        raise ValueError("este é o link de um arquivo; cole o link da pasta do Drive onde ficam as planilhas")
+    achado = re.search(r"/folders/([\w-]{10,})", t) or re.search(r"[?&]id=([\w-]{10,})", t)
+    if achado:
+        return achado.group(1)
+    if re.fullmatch(r"[\w-]{10,}", t):
+        return t
+    raise ValueError("não reconheci o link: use o endereço da pasta (drive.google.com/drive/folders/...)")
+
+
 @dataclass(frozen=True)
 class ArquivoFonte:
     id: str  # estável enquanto o arquivo existir (caminho local ou id do Drive)
@@ -121,6 +140,19 @@ class PastaDrive:
             )
         r.raise_for_status()
         return r
+
+    @property
+    def link(self) -> str:
+        return f"https://drive.google.com/drive/folders/{self.pasta_id}"
+
+    def conferir_acesso(self) -> str:
+        """Lê a própria pasta antes de o vigia começar. Listar uma pasta não compartilhada não dá erro
+        (só volta vazia); ler os dados dela dá 404. Devolve o nome da pasta."""
+        dados = self._get(f"{_API}/{self.pasta_id}", fields="id, name, mimeType", supportsAllDrives="true").json()
+        if dados.get("mimeType") != MIME_PASTA_GOOGLE:
+            raise ValueError(f"\u201c{dados.get('name', self.pasta_id)}\u201d não é uma pasta: cole o link da pasta do Drive")
+        self.descricao = f"pasta do Drive \u201c{dados.get('name', self.pasta_id)}\u201d"
+        return dados.get("name", self.pasta_id)
 
     def listar(self) -> list[ArquivoFonte]:
         arquivos, pagina = [], None

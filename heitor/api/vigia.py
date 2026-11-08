@@ -100,6 +100,9 @@ class Vigia:
     def status(self) -> dict[str, Any]:
         return {
             "fonte": self.fonte.descricao,
+            "link": getattr(self.fonte, "link", None),  # pasta do Drive (None na pasta local)
+            "conta_servico": getattr(self.fonte, "conta", None),  # com quem compartilhar a pasta
+            "personalizada": personalizada,  # pasta trocada pela API (POST /fontes) e não a do .env
             "intervalo_s": self.intervalo_s,
             "rodando": bool(self._thread and self._thread.is_alive()),
             "verificacoes": self.verificacoes,
@@ -360,17 +363,54 @@ def conciliar(auditoria_id: str, linhas: list[Linha]) -> list[dict[str, str]]:
 # ---------------------------------------------------------------------------
 
 vigia: Optional[Vigia] = None
+personalizada = False  # True quando o time trocou a pasta pela API (POST /fontes); False = a do .env
+_troca = threading.Lock()
+
+
+def fonte_da_config() -> Optional[Fonte]:
+    """Drive se HEITOR_DRIVE_PASTA estiver no .env; senão pasta local se
+    HEITOR_FONTE_PASTA estiver; senão nenhuma (só upload pela API)."""
+    if config.DRIVE_PASTA:
+        return PastaDrive(config.DRIVE_PASTA, config.DRIVE_CREDENCIAIS)
+    if config.FONTE_PASTA:
+        return PastaLocal(config.FONTE_PASTA)
+    return None
 
 
 def criar_da_config() -> Optional[Vigia]:
-    """Drive se HEITOR_DRIVE_PASTA estiver no .env; senão pasta local se
-    HEITOR_FONTE_PASTA estiver; senão nenhum vigia (só upload pela API)."""
-    global vigia
-    if config.DRIVE_PASTA:
-        fonte: Fonte = PastaDrive(config.DRIVE_PASTA, config.DRIVE_CREDENCIAIS)
-    elif config.FONTE_PASTA:
-        fonte = PastaLocal(config.FONTE_PASTA)
-    else:
+    global vigia, personalizada
+    fonte = fonte_da_config()
+    if fonte is None:
         return None
-    vigia = Vigia(fonte, config.VIGIA_INTERVALO_S)
+    vigia, personalizada = Vigia(fonte, config.VIGIA_INTERVALO_S), False
     return vigia
+
+
+def abrir_drive(pasta_id: str) -> PastaDrive:
+    """Pasta do Drive pronta para o vigia, com o acesso já conferido. Lança ValueError com a
+    mensagem para a tela (pasta não compartilhada, não é pasta, servidor sem a chave)."""
+    if not Path(config.DRIVE_CREDENCIAIS).is_file():
+        raise ValueError("o servidor não tem a chave da conta de serviço do Drive (HEITOR_DRIVE_CREDENCIAIS)")
+    fonte = PastaDrive(pasta_id, config.DRIVE_CREDENCIAIS)
+    try:
+        fonte.conferir_acesso()
+    except FileNotFoundError:
+        raise ValueError(f"o Drive não achou a pasta: compartilhe-a com {fonte.conta} (permissão de Leitor)") from None
+    return fonte
+
+
+def trocar_fonte(fonte: Fonte, *, da_config: bool = False) -> Vigia:
+    """Passa a observar outra pasta. Há um vigia só (sem contas, uma pasta por vez): a troca vale
+    para todos e apaga o estado em memória, como o reset da demo; a pasta nova é auditada inteira
+    na próxima verificação estável. A pasta antiga não é alterada (o vigia só lê)."""
+    global vigia, personalizada
+    with _troca:
+        antigo = vigia
+        if antigo:
+            antigo.parar()  # espera a verificação em curso terminar
+        estado.limpar()
+        novo = Vigia(fonte, antigo.intervalo_s if antigo else config.VIGIA_INTERVALO_S)
+        vigia, personalizada = novo, not da_config
+        novo.iniciar()
+    log.info("vigia agora observa %s", fonte.descricao)
+    return novo
