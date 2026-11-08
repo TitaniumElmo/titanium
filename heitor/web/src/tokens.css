@@ -79,10 +79,10 @@
   --acento-forte: #ff7a1a;
   --acento-suave: rgba(255, 90, 0, 0.14);
   --brilho: radial-gradient(60rem 40rem at 100% 0%, rgba(255, 90, 0, 0.16), transparent 60%);
-  --cartao-urgente-topo: #793e32;
-  --cartao-urgente-meio: #54383a;
-  --cartao-urgente-base: #16161c;
-  --cartao-brilho: rgba(255, 255, 255, 0.06);
+  --cartao-urgente-topo: #782b0d;
+  --cartao-urgente-meio: #3f1f21;
+  --cartao-urgente-base: #262630;
+  --cartao-brilho: rgba(225, 164, 138, 0.2);
   --atalho-topo: #782b0d;
   --atalho-base: #3a3a4c;
   --atalho-brilho: rgba(225, 164, 138, 0.2);
