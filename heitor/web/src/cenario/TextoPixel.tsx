@@ -69,7 +69,7 @@ export function TextoPixel({ texto, x, y, cor }: { texto: string; x: number; y: 
       width={largura}
       height={5}
       shapeRendering="crispEdges"
-      style={{ position: "absolute", left: x, top: y }}
+      style={{ position: "absolute", left: x, top: y, zIndex: 6 }}
     >
       <path d={caminho} fill={cor} />
     </svg>

@@ -89,6 +89,7 @@ export function AgenteAoVivo() {
         rodando={rodando}
         fichasNaPilha={rodando ? auditoria.n_fichas : mundo.funcionarios.length}
         urgente={mundo.pendencias.some((p) => ehUrgente(p, hoje))}
+        aguardandoCorrecao={mundo.pendencias.some((p) => p.destino === "tecnico" && p.status !== "fechada")}
         progressoLeitura={mundo.fonte ? 1 - (segundos ?? 0) / mundo.fonte.intervalo_s : 0}
         deslocamento={mundo.deslocamento_ms}
       />
