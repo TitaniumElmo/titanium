@@ -16,12 +16,13 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 from datetime import date, datetime, timedelta
 from typing import Optional
 
 from heitor.api import execucao
 from heitor.api.estado import estado
-from heitor.api.notificacao import notificar
+from heitor.api.notificacao import agrupar, notificar
 from heitor.contrato import HistoricoPendencia, Pendencia
 
 log = logging.getLogger("heitor.cobranca")
@@ -51,8 +52,15 @@ def _vencida(p: Pendencia, dia: date) -> bool:
     return p.status in ("aberta", "reaberta") and p.prazo < dia and _cobrada_em(p) != dia
 
 
+LOTE = "cobranca"  # as cobranças de uma rodada saem num e-mail por destinatário
+
+
 def cobrar_atrasadas(dia: Optional[date] = None) -> list[dict]:
-    dia = dia or hoje()
+    with agrupar(LOTE):
+        return _cobrar(dia or hoje())
+
+
+def _cobrar(dia: date) -> list[dict]:
     feitas = []
     for p in estado.listar_pendencias():
         if not _vencida(p, dia):
@@ -81,6 +89,27 @@ def cobrar_atrasadas(dia: Optional[date] = None) -> list[dict]:
             })
         achado = estado.obter_achado(nova.achado_id, nova.auditoria_id)
         notificar(nova, acao_da_regra=achado.acao_sugerida if achado else None,
-                  cobranca=nova.cobrancas, coordenador=nova.escalada)
+                  cobranca=nova.cobrancas, coordenador=nova.escalada, lote=LOTE)
         feitas.append(dados)
     return feitas
+
+
+def relogio(parar: threading.Event, intervalo_s: float) -> None:
+    """Cobrança sem o vigia (deploy sem pasta do Drive): roda a cada `intervalo_s`.
+
+    Com o vigia ligado, a cobrança já roda a cada ciclo dele e este relógio não é usado.
+    Nunca morre: uma falha é registrada e a próxima rodada tenta de novo.
+    """
+    while not parar.wait(intervalo_s):
+        try:
+            cobrar_atrasadas()
+        except Exception:
+            log.exception("cobrança de prazos vencidos falhou")
+
+
+def iniciar_relogio(intervalo_s: float) -> threading.Event:
+    """Liga o relógio numa thread; o Event devolvido, quando setado, desliga."""
+    parar = threading.Event()
+    threading.Thread(target=relogio, args=(parar, intervalo_s), name="cobranca", daemon=True).start()
+    log.info("cobrança de prazos vencidos sem vigia: a cada %ss", intervalo_s)
+    return parar

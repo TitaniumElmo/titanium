@@ -162,7 +162,7 @@ def test_cobra_pendencia_vencida_registra_historico_evento_e_avisa(aud, avisos):
     assert len(ev) == 1 and ev[0].tipo == "ferramenta"
     assert ev[0].entrada == {"pendencia_id": p.id, "cobrancas": 1, "escalada": False}
     assert ev[0].saida["cobrancas"] == 1 and "cobrança 1" in ev[0].saida["resumo"]
-    assert avisos == [(p.id, {"acao_da_regra": "entregar protetor", "cobranca": 1, "coordenador": False})]
+    assert avisos == [(p.id, {"acao_da_regra": "entregar protetor", "cobranca": 1, "coordenador": False, "lote": "cobranca"})]
 
 
 def test_nao_cobra_duas_vezes_no_mesmo_dia_e_escala_na_segunda(aud, avisos):
