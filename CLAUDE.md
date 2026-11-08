@@ -110,9 +110,9 @@ A Nota Técnica 146/2015 do MTE diz que o CA precisa ser válido na **data da co
 - (Histórico: o export antigo `tgg_export_caepi.txt`, retrato de 16/07/2026, só é lido com `HEITOR_CAEPI=<caminho>`.)
 - Campos usados: 1 número do CA (chave), 2 data de validade (o mais importante), 3 situação (só dica), 6 razão social, 8 equipamento (categoria), 9 e 13 (texto livre, só evidência).
 - **Ignorar o rótulo VENCIDO/VÁLIDO** (vale para o dia do retrato). Comparar a data da ficha com a data de validade.
-- CANCELADO (190) e SUSPENSO (6) → pendência de revisão (a base não diz desde quando).
-- 21.011 números repetidos; só 22 discordam → se discordam, pendência "CA com dados conflitantes".
-- 34 linhas com `|` sobrando em texto livre → ler os campos pela posição a partir da esquerda.
+- CANCELADO (62 CAs, 154 registros) e SUSPENSO (3 CAs, 6 registros) → pendência de revisão (a base não diz desde quando).
+- 123.866 registros, 42.534 CAs únicos; 21.254 têm mais de uma linha e só 22 discordam na validade → pendência "CA com dados conflitantes".
+- A base oficial (CSV com aspas) não tem linhas quebradas.
 - CA não encontrado → nunca acusar sem prova; tentar `buscar_ca_proximo`, senão pendência.
 - Capacetes: classe A virou C, classe B virou E (tratar como equivalentes).
 - Comparação de EPI **por categoria** (ex.: "qualquer protetor auditivo"), não por nome exato.
