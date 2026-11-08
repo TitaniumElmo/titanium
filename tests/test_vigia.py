@@ -69,7 +69,8 @@ def test_so_age_quando_o_arquivo_para_de_mudar(vigia, pasta):
 
     aud = esperar_auditoria(r["auditoria_id"])
     assert aud.status == "concluida"
-    assert aud.disparado_por == "mudança na pasta: fichas.csv"
+    assert aud.disparado_por == "alteracao_planilha"
+    assert aud.descricao_disparo == "mudança na pasta: fichas.csv"
     eventos = estado.eventos_desde(aud.id)
     assert eventos[0].saida == "disparado por: mudança na pasta: fichas.csv"
 
@@ -147,7 +148,7 @@ def test_rotas(client, vigia, pasta, monkeypatch):
     s = client.get("/fontes").json()
     assert s["fonte"].startswith("pasta local") and s["arquivos_lidos"] == 1
     lista = client.get("/auditorias").json()
-    assert lista[0]["id"] == r["auditoria_id"] and lista[0]["disparado_por"].startswith("mudança na pasta")
+    assert lista[0]["id"] == r["auditoria_id"] and lista[0]["descricao_disparo"].startswith("mudança na pasta")
     assert client.get("/health").json()["vigia"]["fonte"].startswith("pasta local")
     assert estado.log_desde(0)  # o feed global (/eventos) recebe os eventos do vigia
 

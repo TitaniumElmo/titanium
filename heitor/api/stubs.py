@@ -219,7 +219,7 @@ def rodar_auditoria(auditoria_id: str, linhas: list[Linha], emitir_evento: Calla
                 acao_sugerida=f.acao, norma=f.norma, exposicao_rs=f.exposicao_rs,
             )
             p = criar_pendencia(achado, f.destino, f.acao, date.today() + timedelta(days=f.prazo_dias))
-            emitir("ferramenta", "criar_pendencia", {"achado_id": achado.id, "destino": f.destino}, {"pendencia_id": p["id"]})
+            emitir("ferramenta", "criar_pendencia", {"achado_id": achado.id, "destino": f.destino}, {"pendencia_id": p["id"], "destino": p["destino"], "prazo": p["prazo"]})
             achados.append(achado)
 
         emitir("decisao", None, {}, "terminei", 0.0004)

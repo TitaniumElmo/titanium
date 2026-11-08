@@ -17,7 +17,8 @@ async def feed(request: Request, last_event_id: Optional[str] = Header(None)) ->
     """SSE com TUDO o que o Heitor faz, de todas as auditorias: o feed da tela principal.
 
     Mensagens `event: evento` com um Evento (JSON); `id` = posição no log. Inclui
-    as auditorias e reauditorias disparadas pelo vigia da pasta. Ao reconectar,
+    as auditorias e reauditorias disparadas pelo vigia da pasta e os eventos do vigia antes de existir
+    auditoria ("edicao_detectada", com auditoria_id "vigia"). Ao reconectar,
     o navegador manda Last-Event-ID e o envio continua de onde parou.
     """
     inicio = int(last_event_id) + 1 if last_event_id and last_event_id.isdigit() else 0

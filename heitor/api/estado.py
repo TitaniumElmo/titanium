@@ -58,9 +58,16 @@ class Estado:
     # -- auditorias ---------------------------------------------------------
 
     def criar_auditoria(
-        self, auditoria_id: str, arquivos: list[str], disparado_por: Optional[str] = None
+        self,
+        auditoria_id: str,
+        arquivos: list[str],
+        disparado_por: Optional[str] = None,
+        descricao_disparo: Optional[str] = None,
     ) -> Auditoria:
-        aud = Auditoria(id=auditoria_id, criada_em=datetime.now(), arquivos=arquivos, disparado_por=disparado_por)
+        aud = Auditoria(
+            id=auditoria_id, criada_em=datetime.now(), arquivos=arquivos,
+            disparado_por=disparado_por, descricao_disparo=descricao_disparo,
+        )
         with self._lock:
             self._auditorias[aud.id] = aud
             self._linhas[aud.id] = []

@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional, Union
 
 from heitor.api import ferramentas, fotos as modulo_fotos, integracao
 from heitor.api.estado import estado
+from heitor.api.resumos import com_resumo
 from heitor.contrato import Achado, Evento, Linha, Pendencia
 
 log = logging.getLogger("heitor.execucao")
@@ -41,7 +42,7 @@ def emitir_evento(auditoria_id: str, evento: Union[Evento, dict]) -> None:
     try:
         if isinstance(evento, dict):
             evento = Evento(**{"auditoria_id": auditoria_id, "ts": datetime.now(), **evento})
-        estado.registrar_evento(evento)
+        estado.registrar_evento(com_resumo(evento))
     except Exception:
         log.exception("evento inválido descartado: %r", evento)
 
@@ -166,6 +167,9 @@ def auditar_linhas(
                 "saida": f"disparado por: {disparado_por}",
             })
         estado.salvar_linhas(auditoria_id, linhas)
+        estado.atualizar_auditoria(
+            auditoria_id, n_fichas=len({l.funcionario_id for l in linhas}), n_linhas=len(linhas)
+        )
 
         # Sem retentativa aqui: repetir o agente inteiro duplicaria eventos.
         # A retentativa por ferramenta é responsabilidade do laço do agente.
