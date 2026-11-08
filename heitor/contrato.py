@@ -34,7 +34,8 @@ Regra = Literal[
     "ca_cancelado",  # CANCELADO ou SUSPENSO na base CAEPI
     "ca_conflitante",  # número repetido com dados que discordam
     "epi_inadequado",  # EPI exigido ausente ou de categoria errada
-    "troca_atrasada",  # intervalo maior que a vida útil do fabricante
+    "troca_atrasada",  # EPI além da vida útil AGORA: corrigível (trocar já)
+    "troca_passado",  # EPI ficou além da vida útil entre duas entregas, período já encerrado: passivo
     "treinamento_ausente",
     # O agente usa quando não consegue decidir; viram pendência de revisão.
     "falha_de_ferramenta",  # ferramenta falhou duas vezes
