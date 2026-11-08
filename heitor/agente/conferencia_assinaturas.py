@@ -102,7 +102,7 @@ def conferir_assinaturas(arquivo: str | Path, linhas_planilha: list[Any]) -> dic
     if not linhas:
         return {"linhas": [], "fora_da_planilha": [], "custo_usd": 0.0}
     nome = next((l.get("nome") for l in linhas if l.get("nome")), "") or ""
-    cliente = ClienteLLM(modelo=MODELO_VISAO, reserva=MODELO_VISAO_RESERVA)
+    cliente = ClienteLLM(modelo=MODELO_VISAO, reserva=MODELO_VISAO_RESERVA, timeout_s=90, extra=False)
     b64 = _imagem_b64(Path(arquivo))
 
     lista = "\n".join(f"{i}. {_br(l.get('data'))} - {l.get('epi')} - qtd {l.get('qtd', 1)}"

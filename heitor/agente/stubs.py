@@ -108,7 +108,8 @@ def audita_linha(linha: Linha, funcao: str) -> list[Achado]:
     tipo_ass = linha.get("assinatura_tipo")
     if tipo_ass in EXPLICACAO_ASSINATURA:
         texto = EXPLICACAO_ASSINATURA[tipo_ass].format(t=linha.get("assinatura_texto"))
-        gravidade = "irregular" if conf_ass >= 0.7 else "risco"
+        # Decisão do time: entrega sem linha na ficha (e linha fora da planilha) é risco, nunca irregular.
+        gravidade = "irregular" if conf_ass >= 0.7 and tipo_ass != "sem_linha_na_ficha" else "risco"
         achados.append(_achado(linha, fid, "assinatura_ausente", gravidade, "passivo" if gravidade == "irregular" else "prova",
                                f"linha {n}, {texto}", "conferir a assinatura na ficha física"))
     elif linha.get("assinatura") is None or (linha.get("assinatura") is False and conf_ass < 0.7):
@@ -170,6 +171,13 @@ def audita_funcionario(linhas: list[Linha], funcao: str) -> list[Achado]:
                                        f"trocar {e['epi']} agora"))
                 break
     return achados
+
+
+def audita_fora_da_planilha(itens: list[dict[str, Any]], funcionario_id: str) -> list[Achado]:
+    """Mesma assinatura do heitor/dados/regras.py do Gustavo: linha do papel sem entrega na planilha (risco)."""
+    return [_achado(None, funcionario_id, "ficha_sem_planilha", "risco", "corrigivel",
+                    f"a ficha de papel mostra {i.get('epi')} em {i.get('data')} que não está na planilha de controle; conferir",
+                    "conferir a ficha de papel e a planilha de controle") for i in itens or []]
 
 
 SALARIO_MINIMO = 1621.00  # o mesmo do exposicao.py do Gustavo

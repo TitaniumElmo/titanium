@@ -18,6 +18,10 @@ from heitor.agente.grafo import reauditar, rodar_auditoria  # noqa: E402
 from heitor.agente.tipos import REGRAS_PROPOSTAS  # noqa: E402
 from heitor.contrato import Achado, Evento, Linha, Pendencia  # noqa: E402
 
+import pytest  # noqa: E402
+
+from heitor.agente.conferencia_ca import base_disponivel  # noqa: E402
+
 FUNCOES_DE_DADOS = ("consulta_ca", "buscar_ca_proximo", "exigencia_funcao", "categoria_epi",
                     "audita_linha", "audita_funcionario", "calcula_exposicao")
 
@@ -79,6 +83,7 @@ def test_falha_repetida_gera_uma_pendencia_de_revisao():
     assert len(revisoes) == len(funcionarios), [p["achado_id"] for p in revisoes]
 
 
+@pytest.mark.skipif(not base_disponivel(), reason="base CAEPI não está em dados/ (RelatorioCA_*.csv)")
 def test_cas_em_duvida_viram_uma_conferencia_por_ficha():
     """CA lido que não confere com o EPI: nunca é trocado; vira UMA conferência no papel, com a hipótese da empresa."""
     def l(fid, n, epi, ca):
@@ -147,13 +152,71 @@ def test_conferir_e_auditar_com_ficha_de_papel():
     conf = [p for p in r["pendencias"] if p["acao"].startswith("conferir na ficha física:")]
     assert len(conf) == 1, [p["acao"] for p in r["pendencias"]]
     assert "linha 3: assinatura em dúvida (lido 'Marcos')" in conf[0]["acao"]
-    assert "linha no papel sem entrega na planilha: 2026-10-15 cinto de segurança" in conf[0]["acao"]
+    assert "linha no papel sem entrega na planilha" in conf[0]["acao"] and "cinto de segurança" in conf[0]["acao"]
+    assert any(a["regra"] == "ficha_sem_planilha" and a["gravidade"] == "risco" for a in r["achados"])
     por_linha = {a["linha"]: a for a in r["achados"] if a.get("regra") == "assinatura_ausente"}
-    assert por_linha[2]["gravidade"] == "irregular" and por_linha[4]["gravidade"] == "irregular"
+    assert por_linha[2]["gravidade"] == "irregular"
+    assert por_linha[4]["gravidade"] == "risco"  # decisão do time: sem linha na ficha é risco, nunca irregular
     assert "sem linha na ficha de papel" in por_linha[4]["evidencia"]
     assert 1 not in por_linha  # assinatura que confere não gera achado
-    assert eventos[0].tipo == "decisao" and eventos[1].ferramenta == "conferir_assinaturas"
+    assert any(e.ferramenta == "conferir_ficha_de_papel" for e in eventos)
     assert [e.passo for e in eventos] == list(range(1, len(eventos) + 1))
+
+
+def test_disjuntor_do_llm(monkeypatch):
+    """LLM fora do ar: o funcionário segue em modo degradado e o próximo tenta de novo;
+    depois de 2 funcionários seguidos com falha, o agente para de tentar."""
+    import json as _json
+
+    from heitor.agente import grafo
+    from heitor.agente.llm import LLMIndisponivel, RespostaLLM
+
+    def rodar(falhas: list[bool]) -> dict:
+        roteiro = iter(falhas)
+
+        class LLMFalso:
+            def __init__(self, *a, **k):
+                self.atual = None
+
+            def completar(self, mensagens, max_tokens=400):
+                if mensagens is not self.atual:  # primeira chamada de cada funcionário consome o roteiro
+                    self.atual, self.cai = mensagens, next(roteiro, False)
+                if self.cai:
+                    raise LLMIndisponivel("timeout")
+                return RespostaLLM(_json.dumps({"pensamento": "ok", "ferramenta": "terminei", "args": {}}),
+                                   0.0, 0, 0, "falso", 0.0)
+
+        monkeypatch.setenv("HEITOR_LLM", "on")
+        monkeypatch.setenv("HEITOR_PARALELO", "1")  # o roteiro de falhas depende da ordem dos funcionários
+        monkeypatch.setattr(grafo, "ClienteLLM", LLMFalso)
+        linhas = [dict(l) for l in LINHAS]  # 3 funcionários
+        with stubs_de_dados():
+            return grafo.rodar_auditoria("au-disjuntor", linhas)
+
+    # Cai no 1º funcionário e volta: só o 1º fica degradado.
+    r = rodar([True, False, False])
+    assert list(r["modo_por_funcionario"].values()) == ["degradado", "llm", "llm"], r["modo_por_funcionario"]
+    assert r["modo"] == "misto"
+    # Cai no 1º e no 2º: o 3º nem tenta (disjuntor aberto).
+    r = rodar([True, True, False])
+    assert list(r["modo_por_funcionario"].values()) == ["degradado", "degradado", "deterministico"]
+    # Em todos os casos a auditoria termina com os mesmos achados (os guarda-corpos completam o trabalho).
+    assert r["contagem"] == {"irregular": 4, "risco": 3}
+
+
+def test_agente_nunca_manda_retirar_epi():
+    """Auditoria preventiva: se o LLM escrever "retirar a luva / não usar", o texto vira a ação da regra."""
+    with stubs_de_dados():
+        linhas = {1: dict(LINHAS[0], linha=1), 2: dict(LINHAS[1], linha=2)}
+        ctx = F.Contexto("0302", "servente", linhas)
+        F.executar("auditar_ficha", {}, ctx)
+        achado = next(a for a in ctx.achados.values() if a.get("gravidade") != "ok" and a.get("tipo") != "passivo")
+        r = F.executar("criar_pendencia", {"achado_id": achado["id"], "prazo_dias": 1,
+                                           "acao": "Retirar a luva de raspa e orientar o funcionário a não usar"}, ctx)
+    assert r.ok and "retirar" not in r.saida["acao"].lower()
+    assert r.saida["acao"] == achado["acao_sugerida"]
+    assert F._tira_protecao("Orientar o técnico a não entregar luva de raspa e óculos de proteção")
+    assert not F._tira_protecao("Entregar protetor auricular ao Rafael e colher a assinatura")
 
 
 if __name__ == "__main__":
@@ -161,3 +224,23 @@ if __name__ == "__main__":
         if nome.startswith("test_"):
             fn()
             print("ok ", nome)
+
+
+def test_paralelo_da_o_mesmo_resultado_e_nao_compartilha_achados(monkeypatch):
+    """Funcionários em paralelo não podem dividir o dicionário de achados: uma ferramenta percorre os
+    achados enquanto outra thread acrescenta, e a auditoria inteira caía com "dictionary changed size
+    during iteration" (reproduzido com 8 em paralelo: 19 de 44 auditorias)."""
+    from heitor.agente.grafo import Execucao
+
+    linhas = [{**{c: v for c, v in l.items() if c != "linha"}, "funcionario_id": f"{k:02d}{l['funcionario_id']}"}
+              for k in range(12) for l in LINHAS]
+    exe = Execucao("au-x", linhas, None)
+    assert exe.episodio().achados is not exe.achados
+
+    chave = lambda r: sorted((a["funcionario_id"], a["regra"], a["evidencia"]) for a in r["achados"])  # noqa: E731
+    with stubs_de_dados():
+        monkeypatch.setenv("HEITOR_PARALELO", "1")
+        sequencial = rodar_auditoria("au-seq", [dict(l) for l in linhas])
+        monkeypatch.setenv("HEITOR_PARALELO", "6")
+        for i in range(3):
+            assert chave(rodar_auditoria(f"au-par-{i}", [dict(l) for l in linhas])) == chave(sequencial)
