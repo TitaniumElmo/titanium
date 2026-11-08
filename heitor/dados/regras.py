@@ -3,14 +3,17 @@ import inspect
 import itertools
 import re
 from datetime import date
+from typing import Optional
 
 from heitor.contrato import Achado, Linha
 from heitor.dados.caepi import consulta_ca
-from heitor.dados.funcoes import categoria_epi, exigencia_funcao
+from heitor.dados.funcoes import (CATEGORIAS_CONHECIDAS, agente_da_categoria, categoria_epi, exigencia_funcao,
+                                  pgr_completo)
 
 _ids = itertools.count(1)
 
 LIMITE_ASSINATURA = 0.7
+LIMITE_RESERVA_DIAS = 365
 REGRAS_FORA_DO_CONTRATO = {"funcao_desconhecida", "entrega_sem_ficha", "ficha_sem_planilha", "troca_passado"}
 CAMPOS_EXTRAS = ("na_ficha", "assinatura_tipo", "assinatura_texto", "leitura_assinatura", "conferencia_ca")
 TIPOS_ASSINATURA_DUVIDOSA = {
@@ -22,15 +25,22 @@ TIPOS_ASSINATURA_DUVIDOSA = {
 }
 
 
-def _achado(funcionario_id, linha, regra, gravidade, tipo, evidencia, acao):
+class _AchadoPGR(Achado):
+    agente_nocivo: Optional[str] = None
+
+
+def _achado(funcionario_id, linha, regra, gravidade, tipo, evidencia, acao, agente=None):
     campos = dict(
         id=f"a-{next(_ids)}", funcionario_id=funcionario_id, linha=linha, regra=regra,
         gravidade=gravidade, tipo=tipo, evidencia=evidencia, acao_sugerida=acao,
     )
+    classe = Achado
+    if agente:
+        classe, campos["agente_nocivo"] = _AchadoPGR, agente
     if regra in REGRAS_FORA_DO_CONTRATO:
         # ainda fora do Literal Regra do contrato (proposta): pula a validacao
-        return Achado.model_construct(**campos)
-    return Achado(**campos)
+        return classe.model_construct(**campos)
+    return classe(**campos)
 
 
 def _normaliza_ca(texto):
@@ -60,7 +70,7 @@ def _achados_de_ca(l, ca):
     return achados
 
 
-_OPCIONAIS_DO_ACHADO = ("auditoria_id", "norma", "exposicao_rs")
+_OPCIONAIS_DO_ACHADO = ("auditoria_id", "norma", "exposicao_rs", "agente_nocivo")
 
 
 def _achado_para_dict(a):
@@ -92,6 +102,7 @@ def _aceita_dict(funcao_real):
 
 def _achados_de_assinatura(linha, extras):
     f, n = linha.funcionario_id, linha.linha
+    ag = agente_da_categoria(categoria_epi(linha.epi)) if pgr_completo() else None
     tipo, texto, na_ficha = extras.get("assinatura_tipo"), extras.get("assinatura_texto"), extras.get("na_ficha")
 
     if na_ficha is False or tipo == "sem_linha_na_ficha":
@@ -99,12 +110,12 @@ def _achados_de_assinatura(linha, extras):
         return [_achado(f, n, "entrega_sem_ficha", "risco", "prova",
                         f"linha {n}, entrega de {linha.epi} ({data}) registrada na planilha sem linha na ficha de papel; "
                         "falta a prova da entrega; conferir",
-                        "conferir a ficha de papel")]
+                        "conferir a ficha de papel", agente=ag)]
     if tipo in TIPOS_ASSINATURA_DUVIDOSA:
         citado = f" '{texto}'" if texto else ""
         return [_achado(f, n, "assinatura_ausente", "risco", "prova",
                         f"linha {n}, {TIPOS_ASSINATURA_DUVIDOSA[tipo].format(t=citado)}; conferir",
-                        "conferir a assinatura na ficha física")]
+                        "conferir a assinatura na ficha física", agente=ag)]
     if tipo == "nome_confere":
         return []
 
@@ -115,10 +126,10 @@ def _achados_de_assinatura(linha, extras):
         else:
             evidencia = f"linha {n}, assinatura não identificada na leitura"
         return [_achado(f, n, "assinatura_ausente", "risco", "prova", evidencia,
-                        "conferir a assinatura na ficha física")]
+                        "conferir a assinatura na ficha física", agente=ag)]
     if linha.assinatura is False:
         return [_achado(f, n, "assinatura_ausente", "irregular", "passivo",
-                        f"linha {n}, sem assinatura", "colher assinatura nas próximas entregas")]
+                        f"linha {n}, sem assinatura", "colher assinatura nas próximas entregas", agente=ag)]
     return []
 
 
@@ -158,28 +169,42 @@ def audita_funcionario(linhas: list[Linha], funcao: str, hoje=None) -> list[Acha
         return achados
 
     exigidos = {e["epi"]: e["vida_util_dias"] for e in exig["epis"]}
-    entregas = {}
+    pgr = pgr_completo()
+    agentes = {e["epi"]: e.get("agente_nocivo") for e in exig["epis"]} if pgr else {}
+    entregas, fora_da_tabela = {}, {}
     for l in linhas:
         cat = categoria_epi(l.epi)
         if cat in exigidos and l.data:
             entregas.setdefault(cat, []).append(l.data)
+        elif pgr and l.data and cat in CATEGORIAS_CONHECIDAS and cat not in exigidos:
+            fora_da_tabela.setdefault(cat, []).append(l.data)
 
     for cat, vida_util in exigidos.items():
         datas = sorted(entregas.get(cat, []))
         if not datas:
             achados.append(_achado(fid, None, "epi_inadequado", "irregular", "corrigivel",
-                                   f"nenhuma entrega de {cat} na ficha; a função exige ({exig['agente_nocivo']})",
-                                   f"entregar {cat}, registrar com o CA e colher a assinatura"))
+                                   f"nenhuma entrega de {cat} na ficha; a função exige ({agentes.get(cat) or exig['agente_nocivo']})",
+                                   f"entregar {cat}, registrar com o CA e colher a assinatura",
+                                   agente=agentes.get(cat)))
             continue
         for a, b in zip(datas, datas[1:]):
             if (b - a).days > vida_util:
                 achados.append(_achado(fid, None, "troca_passado", "irregular", "passivo",
                                        f"{cat}: {(b - a).days} dias entre {a} e {b}; vida útil {vida_util} dias",
-                                       "registrar no relatório (não tem conserto)"))
+                                       "registrar no relatório (não tem conserto)", agente=agentes.get(cat)))
         if (hoje - datas[-1]).days > vida_util:
             achados.append(_achado(fid, None, "troca_atrasada", "irregular", "corrigivel",
                                    f"{cat}: {(hoje - datas[-1]).days} dias entre {datas[-1]} e {hoje}; vida útil {vida_util} dias",
-                                   f"trocar {cat} agora"))
+                                   f"trocar {cat} agora", agente=agentes.get(cat)))
+
+    for cat in sorted(fora_da_tabela):
+        ultima = max(fora_da_tabela[cat])
+        dias = (hoje - ultima).days
+        if dias > LIMITE_RESERVA_DIAS:
+            achados.append(_achado(fid, None, "troca_atrasada", "risco", "corrigivel",
+                                   f"{cat}: {dias} dias desde a última entrega em {ultima}; "
+                                   "sem prazo na tabela da empresa; conferir a durabilidade do EPI",
+                                   "conferir a durabilidade do EPI", agente=agente_da_categoria(cat)))
     return achados
 
 
