@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
-from heitor.api import vigia as modulo_vigia
+from heitor.api import seguranca, vigia as modulo_vigia
 
 router = APIRouter(prefix="/fontes", tags=["fontes"])
 
@@ -20,7 +20,7 @@ def status() -> dict:
     return _vigia().status()
 
 
-@router.post("/verificar")
+@router.post("/verificar", dependencies=[Depends(seguranca.exigir_admin)])
 async def verificar() -> dict:
     """Força uma verificação agora (depuração). Na demo, o vigia verifica sozinho."""
     return await run_in_threadpool(_vigia().verificar)

@@ -227,6 +227,7 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 
 - Estado em memória: reiniciar o servidor apaga tudo, e o vigia audita a pasta inteira de novo.
 - CORS liberado para a interface.
+- **Segurança do deploy (link público, os jurados testam):** `POST /demo/reset` só existe com `HEITOR_DEMO=1` e, como `POST /fontes/verificar`, exige o token `HEITOR_TOKEN_ADMIN` (`Authorization: Bearer <token>` ou `X-Heitor-Token`). Sem token configurado, ficam liberadas (desenvolvimento). Subir planilha e responder pendência ficam **abertos**, com limite: até 20 arquivos por envio, 15 MB cada, só CSV/PDF/JPG/PNG/WEBP.
 
 ### Gatilho 1: vigia da pasta do Drive (`heitor/api/vigia.py`)
 - **Configuração (`.env`):** `HEITOR_DRIVE_PASTA` (id da pasta) e `HEITOR_DRIVE_CREDENCIAIS` (chave JSON de uma conta de serviço, **fora do repositório**; a pasta é compartilhada com ela como **Leitor**). Sem Drive, `HEITOR_FONTE_PASTA` (pasta local). `HEITOR_VIGIA_INTERVALO` (padrão 10 s; 3 s na demo).
