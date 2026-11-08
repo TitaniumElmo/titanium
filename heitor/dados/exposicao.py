@@ -1,6 +1,6 @@
 from datetime import date
 
-from heitor.dados.funcoes import exigencia_funcao
+from heitor.dados.funcoes import exigencia_funcao, pgr_completo
 
 SALARIO_MINIMO = 1621.00
 GRAUS_VALIDOS = (0.10, 0.20, 0.40)
@@ -49,6 +49,8 @@ def calcula_exposicao(achados, funcoes=None, hoje=None):
     funcoes = funcoes or {}
     passivos = [_como_dict(a) for a in achados]
     passivos = [a for a in passivos if a.get("tipo") == "passivo" and a.get("gravidade") != "ok"]
+    if pgr_completo():
+        passivos = [a for a in passivos if a.get("agente_nocivo") == "ruído"]
 
     por_func = {}
     for a in passivos:
