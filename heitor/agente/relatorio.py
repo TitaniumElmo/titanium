@@ -66,8 +66,9 @@ _TEXTOS: dict[str, dict[str, Any]] = {
         "base": [SUMULA_80, SUMULA_289, "Art. 166 da CLT: a empresa deve fornecer EPI gratuitamente."],
     },
     "troca_atrasada": {
-        "titulo": "Troca fora da vida útil",
-        "explicacao": "O intervalo entre as trocas passou da durabilidade indicada pelo fabricante.",
+        "titulo": "EPI vencido em uso agora",
+        "explicacao": "Desde a última entrega, o EPI passou da durabilidade indicada pelo fabricante: o trabalhador "
+                      "pode estar sem proteção adequada hoje. A troca corrige.",
         "base": [SUMULA_289],
     },
     "troca_passado": {
