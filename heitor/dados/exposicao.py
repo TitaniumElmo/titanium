@@ -1,3 +1,4 @@
+import re
 from datetime import date
 
 from heitor.dados.funcoes import exigencia_funcao, pgr_completo
@@ -7,6 +8,9 @@ GRAUS_VALIDOS = (0.10, 0.20, 0.40)
 GRAU_PADRAO = 0.20
 TETO_MESES = 60
 MESES_SEM_DATA = 12
+DIAS_POR_MES = 30.4375
+CRITERIO_TROCA_PASSADO = "tempo além da vida útil"
+_PADRAO_TROCA = re.compile(r"(\d+) dias entre .*?vida útil (\d+) dias")
 DESCRICAO = "exposição potencial máxima, se a perícia confirmar a insalubridade"
 
 
@@ -33,6 +37,15 @@ def _meses_entre(inicio, hoje):
     return max(meses, 0)
 
 
+def _meses_da_troca_passado(achado):
+    """Tempo além da vida útil, em meses (sem arredondar); None se a evidência não puder ser lida."""
+    m = _PADRAO_TROCA.search(str(achado.get("evidencia") or ""))
+    if not m:
+        return None
+    dias, vida = int(m.group(1)), int(m.group(2))
+    return max(0, dias - vida) / DIAS_POR_MES
+
+
 def _grau_da_funcao(funcao):
     exig = exigencia_funcao(funcao)
     if not exig["encontrada"]:
@@ -55,13 +68,22 @@ def calcula_exposicao(achados, funcoes=None, hoje=None):
     por_func = {}
     for a in passivos:
         fid = a["funcionario_id"]
-        d = _data_do_achado(a)
-        meses = _meses_entre(d, hoje) if d else MESES_SEM_DATA
-        item = por_func.setdefault(fid, {"meses": 0, "estimados": True, "funcao": None})
-        if d and (item["estimados"] or meses > item["meses"]):
-            item.update(meses=meses, estimados=False)
-        elif d is None and item["estimados"]:
-            item["meses"] = max(item["meses"], meses)
+        criterio = None
+        if a.get("regra") == "troca_passado":
+            # sempre pela evidência; o campo data do achado é ignorado
+            meses = _meses_da_troca_passado(a)
+            if meses is not None:
+                estimados, criterio = False, CRITERIO_TROCA_PASSADO
+            else:
+                meses, estimados = MESES_SEM_DATA, True
+        elif (d := _data_do_achado(a)) is not None:
+            meses, estimados = _meses_entre(d, hoje), False
+        else:
+            meses, estimados = MESES_SEM_DATA, True
+        item = por_func.setdefault(fid, {"meses": -1, "estimados": True, "funcao": None, "criterio": None})
+        # medido sempre vence estimado; entre medidos (ou entre estimados), o maior
+        if (not estimados, meses) > (not item["estimados"], item["meses"]):
+            item.update(meses=meses, estimados=estimados, criterio=criterio)
         item["funcao"] = item["funcao"] or funcoes.get(fid) or a.get("funcao")
 
     detalhe, avisos = {}, []
@@ -72,9 +94,11 @@ def calcula_exposicao(achados, funcoes=None, hoje=None):
             avisos.append(f"funcionário {fid}: {aviso}")
         meses = min(item["meses"], TETO_MESES)
         detalhe[fid] = {
-            "grau": grau, "meses": meses,
+            "grau": grau, "meses": round(meses, 2),
             "valor_brl": round(grau * SALARIO_MINIMO * meses * 1, 2),
         }
+        if item["criterio"]:
+            detalhe[fid]["criterio"] = item["criterio"]
         if item["estimados"]:
             detalhe[fid]["meses_estimados"] = True
 
