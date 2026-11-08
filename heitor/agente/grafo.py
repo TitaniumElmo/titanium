@@ -166,9 +166,15 @@ class Execucao:
             self.comp.falhas_seguidas = self.comp.falhas_seguidas + 1 if falhou else 0
 
     def episodio(self) -> "Execucao":
-        """Cópia rasa para rodar um funcionário em paralelo (contexto próprio, resto compartilhado)."""
+        """Cópia rasa para rodar um funcionário em paralelo (contexto próprio, resto compartilhado).
+
+        Os achados ficam num dicionário PRÓPRIO do episódio: as ferramentas percorrem os achados enquanto
+        outros funcionários acrescentam os deles, e um dicionário compartilhado derruba a auditoria com
+        "dictionary changed size during iteration". rodar_auditoria junta tudo depois que todos terminam.
+        """
         c = copy.copy(self)
         c.ctx = None
+        c.achados = {}
         return c
 
     def novo_contexto(self, fid: str) -> F.Contexto:
@@ -452,13 +458,16 @@ def rodar_auditoria(auditoria_id: str, linhas: list[Any], emitir_evento: EmitirE
         return construir_grafo(exe).invoke({"fila": fids}, {"recursion_limit": limite})["resultado"]
 
     # Um grafo por funcionário, até `paralelo` ao mesmo tempo; a consolidação roda uma vez no fim.
-    def episodio(fid: str) -> None:
+    def episodio(fid: str) -> Execucao:
         ep = exe.episodio()
         construir_grafo(ep, com_consolidacao=False).invoke({"fila": [fid]}, {"recursion_limit": LIMITE_PASSOS * 2 + 18})
+        return ep
 
     with ThreadPoolExecutor(max_workers=paralelo) as pool:
-        for f in [pool.submit(episodio, fid) for fid in fids]:
-            f.result()  # propaga exceção inesperada (as esperadas já viram pendência de revisão)
+        episodios = [f.result() for f in [pool.submit(episodio, fid) for fid in fids]]
+        # f.result() propaga exceção inesperada (as esperadas já viram pendência de revisão)
+    for ep in episodios:  # todos terminaram: junta os achados de cada funcionário, sem concorrência
+        exe.achados.update(ep.achados)
     return _consolidar(exe)
 
 

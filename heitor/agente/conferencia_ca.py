@@ -53,30 +53,39 @@ def familia(texto: str | None) -> str | None:
 def _indice() -> dict[str, str]:
     """número do CA -> equipamento.
 
-    Fonte oficial do time: a base RelatorioCA em dados/, pelo carregador do Gustavo (heitor.dados.caepi).
-    Plano B: o export antigo (data/tgg_export_caepi.txt). Sem nenhuma das duas, a checagem CA × EPI
-    fica desligada E avisa no log (antes ficava desligada em silêncio).
+    Usa a base oficial do time, a mesma das regras (heitor.dados.caepi: dados/RelatorioCA_*.csv). O export
+    antigo (tgg_export_caepi.txt, separado por "|") só é lido se HEITOR_CAEPI apontar para ele: antes ele
+    era o padrão e, em qualquer máquina sem esse arquivo (inclusive o deploy), a conferência se desligava
+    em silêncio. Sem base, a checagem CA × EPI fica desligada E avisa no log.
     """
-    try:
-        from heitor.dados.caepi import base_padrao
+    if os.getenv("HEITOR_CAEPI"):
+        indice = _indice_export_antigo()
+    else:
+        try:
+            from heitor.dados.caepi import base_padrao
 
-        grupos = base_padrao()["grupos"]
-        indice = {str(ca).strip().lstrip("0"): str(regs[0].get("EQUIPAMENTO", "")).strip()
-                  for ca, regs in grupos.items() if str(ca).strip() and regs}
-        if indice:
-            return indice
-    except Exception as e:  # noqa: BLE001 — módulo ou base ausente: tenta o plano B
-        _log.info("base CAEPI do Gustavo indisponível (%s); tentando o export antigo", type(e).__name__)
-    indice = {}
-    if CAMINHO_CAEPI.exists():
-        with CAMINHO_CAEPI.open(encoding="utf-8", errors="replace") as f:
-            next(f, None)
-            for linha in f:
-                p = linha.split("|", 8)
-                if len(p) > 7 and p[0].strip():
-                    indice.setdefault(p[0].strip().lstrip("0"), p[7].strip())
+            grupos = base_padrao()["grupos"]
+            indice = {str(ca).strip().lstrip("0"): str(regs[0].get("EQUIPAMENTO", "")).strip()
+                      for ca, regs in grupos.items() if str(ca).strip() and regs}
+        except Exception as e:  # noqa: BLE001 — módulo ou base ausente
+            _log.info("base CAEPI indisponível (%s)", type(e).__name__)
+            indice = {}
     if not indice:
         _log.warning("sem base CAEPI (dados/RelatorioCA_*.csv): a checagem CA × EPI está DESLIGADA")
+    return indice
+
+
+def _indice_export_antigo() -> dict[str, str]:
+    """Export antigo da base (coluna 8 = equipamento), só com HEITOR_CAEPI."""
+    indice: dict[str, str] = {}
+    if not CAMINHO_CAEPI.exists():
+        return indice
+    with CAMINHO_CAEPI.open(encoding="utf-8", errors="replace") as f:
+        next(f, None)
+        for linha in f:
+            p = linha.split("|", 8)
+            if len(p) > 7 and p[0].strip():
+                indice.setdefault(p[0].strip().lstrip("0"), p[7].strip())
     return indice
 
 
