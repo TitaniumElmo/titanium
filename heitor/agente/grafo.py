@@ -238,6 +238,8 @@ def politica_deterministica(exe: Execucao) -> dict[str, Any]:
     if ctx.foto and not ctx.papel_conferido:
         return {"ferramenta": "conferir_ficha_de_papel", "args": {},
                 "pensamento": "sem o LLM, confiro sempre a ficha de papel quando há foto (opção segura)"}
+    if F.aso_ligado() and not ctx.aso_auditado:
+        return {"ferramenta": "auditar_aso", "args": {}, "pensamento": "conferir os exames médicos (ASO)"}
     for a in ctx.achados_do_funcionario():
         if precisa_pendencia(ctx, a):
             return {"ferramenta": "criar_pendencia", "args": {"achado_id": a["id"]},
@@ -355,6 +357,9 @@ def construir_grafo(exe: Execucao, com_consolidacao: bool = True):
             r = F.executar("conferir_ficha_de_papel", {}, ctx)
             exe.evento("conferir_ficha_de_papel", {}, r.saida,
                        pensamento="guarda-corpo: há foto da ficha de papel e ela não foi conferida; só o papel prova a assinatura")
+        if F.aso_ligado() and not ctx.aso_auditado:
+            r = F.executar("auditar_aso", {}, ctx)
+            exe.evento("auditar_aso", {}, r.saida, pensamento="guarda-corpo: exames médicos (ASO) não conferidos")
         # Falhas que o agente deixou sem pendência: a mesma ação vira UMA pendência listando as linhas
         # (5 avisos "colher assinatura nas próximas entregas" para o mesmo funcionário viram 1).
         grupos: dict[tuple, list[Achado]] = {}
