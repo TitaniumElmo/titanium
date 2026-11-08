@@ -25,6 +25,21 @@ export function AvisoConferindo() {
       statusAntes.current.set(a.id, a.status);
     }
   }, [mundo.auditorias]);
+  // Correção registrada pela tela (não é auditoria do vigia): o formulário avisa por evento.
+  const [correcao, setCorrecao] = useState<{ texto: string; ok: boolean; ate: number } | null>(null);
+  useEffect(() => {
+    const ouvir = (e: Event) => {
+      const d = (e as CustomEvent<{ texto: string; ok: boolean }>).detail;
+      setCorrecao({ ...d, ate: Date.now() + MOSTRAR_CONCLUSAO_MS });
+    };
+    window.addEventListener("elmo:correcao", ouvir);
+    return () => window.removeEventListener("elmo:correcao", ouvir);
+  }, []);
+  useEffect(() => {
+    if (!correcao) return;
+    const t = window.setTimeout(() => setCorrecao(null), Math.max(0, correcao.ate - Date.now()));
+    return () => window.clearTimeout(t);
+  }, [correcao]);
   useEffect(() => {
     if (!concluida) return;
     const t = window.setTimeout(() => setConcluida(null), Math.max(0, concluida.ate - Date.now()));
@@ -53,6 +68,28 @@ export function AvisoConferindo() {
     );
   }
 
+  if (correcao && !concluida) {
+    return (
+      <div
+        role="status"
+        className={
+          "sticky top-0 z-20 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b px-4 py-2 text-sm max-menu:top-14 " +
+          (correcao.ok ? "border-ok-borda bg-ok-fundo" : "border-acento/30 bg-acento-suave")
+        }
+      >
+        <span className="flex items-center gap-2">
+          <span className={"size-2 rounded-full " + (correcao.ok ? "bg-ok-borda" : "bg-acento")} />
+          <span>{correcao.texto}</span>
+        </span>
+        <Link to="/pendencias" className="text-label text-acento hover:underline">
+          ver pendências
+        </Link>
+        <button type="button" onClick={() => setCorrecao(null)} className="text-label text-fraco hover:underline" aria-label="Fechar aviso">
+          fechar
+        </button>
+      </div>
+    );
+  }
   if (!concluida) return null;
   const auditoria = mundo.auditorias.find((a) => a.id === concluida.id);
   const item = mundo.atividade.find((i) => i.auditoria_id === concluida.id);

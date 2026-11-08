@@ -32,7 +32,8 @@ export function RegistrarCorrecao({ p, hoje }: { p: Pendencia; hoje: string }) {
     const ruim = daLinha?.ca ?? "";
     const contagem = new Map<string, number>();
     for (const l of mundo.linhas) {
-      if (l.ca && l.ca !== ruim && epi && l.epi.toLowerCase().includes(epi.toLowerCase().split(" ")[0] ?? "")) {
+      const familia = epi.toLowerCase().slice(0, 3); // "bota" e "botina", "protetor auricular" e "protetor auditivo"
+      if (l.ca && l.ca !== ruim && familia && l.epi.toLowerCase().startsWith(familia)) {
         contagem.set(l.ca, (contagem.get(l.ca) ?? 0) + 1);
       }
     }
@@ -48,7 +49,14 @@ export function RegistrarCorrecao({ p, hoje }: { p: Pendencia; hoje: string }) {
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<{ ok: boolean; texto: string } | null>(null);
 
-  if (p.status !== "aberta" && p.status !== "reaberta") return null;
+  if (p.status !== "aberta" && p.status !== "reaberta" && !resultado) return null;
+  if (p.status !== "aberta" && p.status !== "reaberta" && resultado) {
+    return (
+      <section role="status" className={"rounded-cartao border p-4 text-sm " + (resultado.ok ? "border-ok-borda bg-ok-fundo text-ok" : "border-acento/30 bg-superficie")}>
+        {resultado.texto}
+      </section>
+    );
+  }
   const rh = p.destino === "rh";
 
   const enviar = async (e: FormEvent) => {
@@ -77,6 +85,11 @@ export function RegistrarCorrecao({ p, hoje }: { p: Pendencia; hoje: string }) {
       );
     }
     setEnviando(false);
+    if (r.ok) {
+      window.dispatchEvent(new CustomEvent("elmo:correcao", {
+        detail: { texto: `${NOME_AGENTE} conferiu a correção de ${p.funcionario_nome}: ${ROTULO_STATUS[r.status ?? ""] ?? r.status}`, ok: r.status !== "reaberta" },
+      }));
+    }
     setResultado(
       r.ok
         ? { ok: r.status === "fechada" || r.status === "aguardando", texto: `${ROTULO_STATUS[r.status ?? ""] ?? `Status: ${r.status}.`}${r.detalhe ? ` ${r.detalhe}.` : ""}` }
