@@ -199,6 +199,21 @@ def test_disjuntor_do_llm(monkeypatch):
     assert r["contagem"] == {"irregular": 4, "risco": 3}
 
 
+def test_agente_nunca_manda_retirar_epi():
+    """Auditoria preventiva: se o LLM escrever "retirar a luva / não usar", o texto vira a ação da regra."""
+    with stubs_de_dados():
+        linhas = {1: dict(LINHAS[0], linha=1), 2: dict(LINHAS[1], linha=2)}
+        ctx = F.Contexto("0302", "servente", linhas)
+        F.executar("auditar_ficha", {}, ctx)
+        achado = next(a for a in ctx.achados.values() if a.get("gravidade") != "ok" and a.get("tipo") != "passivo")
+        r = F.executar("criar_pendencia", {"achado_id": achado["id"], "prazo_dias": 1,
+                                           "acao": "Retirar a luva de raspa e orientar o funcionário a não usar"}, ctx)
+    assert r.ok and "retirar" not in r.saida["acao"].lower()
+    assert r.saida["acao"] == achado["acao_sugerida"]
+    assert F._tira_protecao("Orientar o técnico a não entregar luva de raspa e óculos de proteção")
+    assert not F._tira_protecao("Entregar protetor auricular ao Rafael e colher a assinatura")
+
+
 if __name__ == "__main__":
     for nome, fn in list(globals().items()):
         if nome.startswith("test_"):

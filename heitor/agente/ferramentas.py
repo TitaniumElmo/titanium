@@ -441,7 +441,7 @@ def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, pr
                              destino: str | None = None, limite: int = 300) -> Pendencia:
     destino = destino or DESTINO_POR_TIPO.get(achado.get("tipo", ""), "tecnico")
     acao = str(acao or achado.get("acao_sugerida") or "revisar o achado").strip()[:limite]
-    if _sugere_fraude(acao):
+    if _sugere_fraude(acao) or _tira_protecao(acao):
         acao = achado.get("acao_sugerida") or "revisar o achado"
     try:
         dias = max(1, min(30, int(prazo_dias)))
@@ -455,6 +455,16 @@ def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, pr
 
 
 _FRAUDE = re.compile(r"(assinar|preencher|alterar|retroag|antedat).{0,40}(antig|passad|retroativ|anterior)", re.I)
+
+
+_TIRA_PROTECAO = re.compile(
+    r"(retir|recolh|remov|tirar|tire|suspend|proib|deixar de (usar|entregar)|n[ãa]o (us|entreg))\w*.{0,60}"
+    r"(epi|luva|[óo]culos|capacete|botina|bota|cal[çc]ado|protetor|respirador|m[áa]scara|uso)", re.I)
+
+
+def _tira_protecao(texto: str) -> bool:
+    """Guarda-corpo: auditoria preventiva nunca manda retirar ou deixar de usar um EPI."""
+    return bool(_TIRA_PROTECAO.search(texto))
 
 
 def _sugere_fraude(texto: str) -> bool:

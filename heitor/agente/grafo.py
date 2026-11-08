@@ -79,6 +79,10 @@ COMO DECIDIR (você escolhe o caminho; não precisa usar todas as ferramentas):
   Ex.: "Entregar protetor auricular ao Rafael e colher a assinatura: a última troca foi em 03/2025 e a vida
   útil é de 6 meses, então ele está sem proteção contra o ruído."
 - Nunca sugira preencher, assinar ou alterar ficha antiga com data passada: isso é fraude documental.
+- Nunca mande retirar, recolher ou deixar de usar um EPI. EPI a mais (não exigido pela função) não é risco
+  ao trabalhador; no máximo, peça para conferir se o EPI certo também foi entregue.
+- Se há foto da ficha de papel, confira-a (conferir_ficha_de_papel): a planilha diz que foi assinado,
+  mas só o papel prova a entrega. Faça isso antes de terminar.
 - Ficha sem falhas: termine logo. Você tem no máximo {LIMITE_PASSOS} passos; quando terminar, chame terminei.
 
 Responda SOMENTE com um objeto JSON, sem texto fora dele:
@@ -333,15 +337,30 @@ def construir_grafo(exe: Execucao, com_consolidacao: bool = True):
         if not ctx.funcionario_auditado:
             r = F.executar("audita_funcionario", {}, ctx)
             exe.evento("audita_funcionario", {}, r.saida, pensamento="guarda-corpo: regras da ficha inteira")
+        if ctx.foto and not ctx.papel_conferido:
+            r = F.executar("conferir_ficha_de_papel", {}, ctx)
+            exe.evento("conferir_ficha_de_papel", {}, r.saida,
+                       pensamento="guarda-corpo: há foto da ficha de papel e ela não foi conferida; só o papel prova a assinatura")
+        # Falhas que o agente deixou sem pendência: a mesma ação vira UMA pendência listando as linhas
+        # (5 avisos "colher assinatura nas próximas entregas" para o mesmo funcionário viram 1).
+        grupos: dict[tuple, list[Achado]] = {}
         for a in ctx.achados_do_funcionario():
             if precisa_pendencia(ctx, a):
-                try:
-                    p = F.criar_pendencia_validada(ctx, a)
-                except Exception as e:  # noqa: BLE001 — ex.: regra ainda fora do contrato; a auditoria segue
-                    exe.evento("pendencia_recusada", {"achado_id": a["id"]}, {"erro": f"{type(e).__name__}: {str(e)[:150]}"})
-                    continue
-                exe.evento("criar_pendencia", {"achado_id": a["id"]}, p,
-                           pensamento="guarda-corpo: achado sem pendência")
+                grupos.setdefault((a.get("regra"), a.get("acao_sugerida")), []).append(a)
+        for (_regra, acao), achados in grupos.items():
+            linhas = sorted(a["linha"] for a in achados if a.get("linha") is not None)
+            texto = acao or "revisar o achado"
+            if len(achados) > 1 and linhas:
+                texto += " (linhas " + ", ".join(map(str, linhas)) + ")"
+            try:
+                p = F.criar_pendencia_validada(ctx, achados[0], acao=texto)
+            except Exception as e:  # noqa: BLE001 — ex.: regra ainda fora do contrato; a auditoria segue
+                exe.evento("pendencia_recusada", {"achado_id": achados[0]["id"]}, {"erro": f"{type(e).__name__}: {str(e)[:150]}"})
+                continue
+            for a in achados[1:]:
+                ctx.pendencia_por_achado[a["id"]] = p["id"]
+            exe.evento("criar_pendencia", {"achados": [a["id"] for a in achados]}, p,
+                       pensamento="guarda-corpo: falha sem pendência" + (f" ({len(achados)} iguais, agrupadas)" if len(achados) > 1 else ""))
         try:
             p = F.criar_conferencia(ctx)
         except Exception as e:  # noqa: BLE001
