@@ -13,6 +13,8 @@ const DIA = 86_400_000;
 
 const MOTIVO_SIMPLES: Record<Gatilho, string> = {
   alteracao_planilha: "A planilha mudou",
+  upload: "Uma planilha foi enviada",
+  manual: "Conferência pedida",
   prazo_vencido: "Um prazo venceu",
   vencimento_futuro: "Um vencimento se aproxima",
   nova_base_caepi: "A base de CAs do governo mudou",
@@ -90,7 +92,7 @@ function Situacao({ semProtecao, aguardandoRh, emDia, total }: { semProtecao: nu
   );
 }
 
-function CartaoTarefa({ p, funcao, hoje }: { p: Pendencia; funcao: string; hoje: string }) {
+function CartaoTarefa({ p, funcao, hoje, urlPlanilha }: { p: Pendencia; funcao: string; hoje: string; urlPlanilha: string }) {
   const prazo = rotuloPrazo(p, hoje);
   const destaque = prazo.tom !== "normal" || p.escalada;
   return (
@@ -117,7 +119,7 @@ function CartaoTarefa({ p, funcao, hoje }: { p: Pendencia; funcao: string; hoje:
         )}
       </div>
       <h3 className="mt-2 text-label">
-        {p.nome} <span className="font-normal text-apoio">· {funcao}</span>
+        {p.funcionario_nome} <span className="font-normal text-apoio">· {funcao}</span>
       </h3>
       <p className="mt-1 text-body">{p.acao.charAt(0).toUpperCase() + p.acao.slice(1)}</p>
       <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-borda pt-3">
@@ -125,9 +127,19 @@ function CartaoTarefa({ p, funcao, hoje }: { p: Pendencia; funcao: string; hoje:
           <span className="font-medium text-texto">Como resolver: </span>
           {comoResolver(p)}
         </p>
-        <BotaoLink para={`/pendencias?p=${p.id}`} className="shrink-0">
-          Ver detalhes
-        </BotaoLink>
+        <span className="flex shrink-0 flex-wrap gap-2">
+          <a
+            href={urlPlanilha}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-controle border border-borda bg-superficie-2 px-3.5 text-sm font-medium text-texto transition-colors hover:border-fraco"
+          >
+            Abrir a planilha ↗
+          </a>
+          <BotaoLink para={`/pendencias?p=${p.id}`} variante="fantasma">
+            Ver detalhes
+          </BotaoLink>
+        </span>
       </div>
     </li>
   );
@@ -185,7 +197,7 @@ export function Inicio() {
     );
   }
 
-  const rodando = mundo.execucao_atual !== null;
+  const rodando = mundo.execucao_atual !== null || mundo.edicao !== null;
   const visiveis = dados.doTecnico.slice(0, 4);
 
   return (
@@ -196,10 +208,15 @@ export function Inicio() {
         <Link
           to={rodando ? "/agente" : "/historico"}
           className="inline-flex h-9 items-center gap-2 rounded-controle border border-borda bg-superficie px-3 text-sm text-apoio hover:border-fraco"
-          title={`O ${NOME_AGENTE} lê a planilha a cada ${mundo.fonte.intervalo_s} segundos`}
+          title={`O ${NOME_AGENTE} lê a planilha a cada ${mundo.fonte.intervalo_s} segundos · próxima leitura em ${segundos ?? "—"} s`}
         >
           <span className={cn("size-2 rounded-full", rodando ? "animar-pulsar bg-acento" : "bg-ok-borda")} />
-          {rodando ? `${NOME_AGENTE} conferindo agora` : `${NOME_AGENTE} vigiando · nova leitura em ${segundos ?? "—"} s`}
+          <span className="tabular-nums">
+            {dados.total} fichas vigiadas ·{" "}
+            {rodando
+              ? "conferindo agora"
+              : `última conferência às ${mundo.fonte.ultima_leitura ? hora(mundo.fonte.ultima_leitura) : "—"}`}
+          </span>
         </Link>
       }
     >
@@ -221,7 +238,7 @@ export function Inicio() {
         ) : (
           <ol className="flex flex-col gap-3">
             {visiveis.map((p) => (
-              <CartaoTarefa key={p.id} p={p} funcao={dados.funcaoDe[p.funcionario_id] ?? ""} hoje={hoje} />
+              <CartaoTarefa key={p.id} p={p} funcao={dados.funcaoDe[p.funcionario_id] ?? ""} hoje={hoje} urlPlanilha={mundo.fonte?.url ?? ""} />
             ))}
           </ol>
         )}
@@ -245,7 +262,7 @@ export function Inicio() {
                 <li key={p.id} className="border-t border-borda py-2 first:border-t-0">
                   <Link to={`/pendencias?p=${p.id}`} className="flex items-start justify-between gap-3 text-sm hover:text-texto">
                     <span>
-                      <span className="font-medium">{p.nome}</span>
+                      <span className="font-medium">{p.funcionario_nome}</span>
                       <span className="block text-apoio">{p.acao.charAt(0).toUpperCase() + p.acao.slice(1)}</span>
                     </span>
                     <span className="shrink-0 text-xs tabular-nums text-apoio">até {dataCurta(p.prazo)}</span>
@@ -301,7 +318,7 @@ export function Inicio() {
               >
                 <span className="font-mono text-xs leading-5 text-apoio">{hora(a.ts)}</span>
                 <span>
-                  <span className="text-apoio">{MOTIVO_SIMPLES[a.gatilho]}: </span>
+                  <span className="text-apoio">{MOTIVO_SIMPLES[a.disparado_por]}: </span>
                   {a.resumo.replace(/ → /g, ", ")}
                 </span>
               </Link>

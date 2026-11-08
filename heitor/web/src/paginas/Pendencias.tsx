@@ -81,7 +81,7 @@ function LinhaPendencia({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs text-fraco">{p.id}</span>
-            <span className="text-label">{p.nome}</span>
+            <span className="text-label">{p.funcionario_nome}</span>
             <SeloDestino destino={p.destino} />
             {ehUrgente(p, hoje) && <SeloUrgente />}
             {p.escalada && <SeloEscalado />}
@@ -90,7 +90,7 @@ function LinhaPendencia({
             )}
           </div>
           <p className="mt-1 line-clamp-2 text-sm text-apoio" title={p.acao}>{p.acao}</p>
-          <p className="mt-1.5 text-xs text-fraco">Disparado por: {ROTULO_GATILHO[p.gatilho]}</p>
+          <p className="mt-1.5 text-xs text-fraco">Disparado por: {ROTULO_GATILHO[p.disparado_por]}</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:justify-end">
           <Prazo prazo={p.prazo} fechada={p.status === "fechada"} hoje={hoje} />
@@ -127,7 +127,7 @@ function Detalhe({ p, hoje, aoFechar }: { p: Pendencia; hoje: string; aoFechar: 
               {ehUrgente(p, hoje) && <SeloUrgente />}
               {p.escalada && <SeloEscalado />}
             </div>
-            <h2 className="mt-2 text-h2">{p.nome}</h2>
+            <h2 className="mt-2 text-h2">{p.funcionario_nome}</h2>
             <p className="mt-1 text-body">{p.acao}</p>
           </div>
           <button
@@ -156,8 +156,18 @@ function Detalhe({ p, hoje, aoFechar }: { p: Pendencia; hoje: string; aoFechar: 
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <SeloGatilho gatilho={p.gatilho} comPrefixo />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <SeloGatilho gatilho={p.disparado_por} comPrefixo />
+            {mundo.fonte && (
+              <a
+                href={mundo.fonte.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-9 items-center rounded-controle border border-borda bg-superficie px-3.5 text-sm font-medium hover:border-fraco"
+              >
+                Abrir a planilha ↗
+              </a>
+            )}
           </div>
           <p className="text-sm text-apoio">
             <span className="text-fraco">Motivo: </span>
@@ -253,7 +263,7 @@ export function Pendencias() {
                 onClick={() => setParametros({ p: p.id })}
                 className="rounded-selo border border-irregular-borda/40 px-2 py-0.5 text-xs font-medium text-irregular hover:bg-superficie"
               >
-                <span className="font-mono">{p.id}</span> · {p.nome.split(" ")[0]} · até {dataCurta(p.prazo)}
+                <span className="font-mono">{p.id}</span> · {p.funcionario_nome.split(" ")[0]} · até {dataCurta(p.prazo)}
               </button>
             ))}
           </span>
