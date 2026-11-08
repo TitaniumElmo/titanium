@@ -14,6 +14,10 @@
   --color-acento: var(--acento);
   --color-acento-forte: var(--acento-forte);
   --color-acento-suave: var(--acento-suave);
+  --color-destaque-claro: var(--destaque-claro);
+  --background-image-destaque: var(--gradiente-destaque);
+  --background-image-destaque-area: var(--gradiente-area);
+  --background-image-cartao: var(--gradiente-cartao);
   --color-sobre-acento: var(--sobre-acento);
 
   --color-irregular: var(--irregular-texto);
@@ -285,6 +289,16 @@ body {
   }
 }
 
+@keyframes contorno {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .animar-selo {
   animation: selo 420ms ease-out both;
 }
@@ -295,6 +309,10 @@ body {
 
 .animar-entrar {
   animation: entrar 400ms ease-out both;
+}
+
+.animar-contorno {
+  animation: contorno 1.2s ease-in-out infinite;
 }
 
 .animar-pulsar {
