@@ -11,6 +11,9 @@ escrito pelo LLM. O LLM lê o conteúdo da planilha; uma célula com instruçõe
 poderia fazê-lo escrever qualquer coisa (um link, por exemplo) num e-mail
 enviado em nome do Heitor. O texto do LLM continua na pendência e na tela.
 
+Nome do produto nos e-mails (remetente à parte, que vem de SMTP_FROM):
+    HEITOR_NOME_NO_EMAIL=Elmo   (padrão: Heitor). Só o texto do e-mail muda.
+
 Teste de envio (manda um e-mail para o técnico e para o RH configurados):
     python -m heitor.api.notificacao --teste
 """
@@ -33,6 +36,11 @@ _DESTINATARIO_ENV = {"tecnico": "HEITOR_EMAIL_TECNICO", "rh": "HEITOR_EMAIL_RH"}
 _PARA_QUEM = {"tecnico": "técnico de segurança", "rh": "RH"}
 
 
+def nome() -> str:
+    """Nome do produto no texto dos e-mails."""
+    return os.getenv("HEITOR_NOME_NO_EMAIL") or "Heitor"
+
+
 def _texto(p: Pendencia, assunto: str, acao: str) -> str:
     return (
         f"{assunto}\n\n"
@@ -41,17 +49,16 @@ def _texto(p: Pendencia, assunto: str, acao: str) -> str:
         f"Por quê: {p.motivo or '-'}\n"
         f"Prazo: {p.prazo.strftime('%d/%m/%Y')}\n\n"
         f"Pendência {p.id} (status: {p.status}), aberta pela auditoria {p.auditoria_id or '-'}.\n"
-        "O Heitor aponta lacunas na prova documental das fichas de EPI; ele não afirma se há insalubridade.\n"
+        f"O {nome()} aponta lacunas na prova documental das fichas de EPI; ele não afirma se há insalubridade.\n"
     )
 
 
-def notificar(
-    pendencia: Pendencia, assunto: str = "Nova pendência do Heitor", acao_da_regra: Optional[str] = None
-) -> None:
+def notificar(pendencia: Pendencia, reaberta: bool = False, acao_da_regra: Optional[str] = None) -> None:
     """acao_da_regra: a `acao_sugerida` do achado (texto das regras). Sem ela, vai uma ação genérica,
     nunca o texto do LLM."""
     destinatario = os.getenv(_DESTINATARIO_ENV[pendencia.destino])
-    acao = acao_da_regra or "ver a pendência no Heitor"
+    assunto = f"Pendência reaberta pelo {nome()}" if reaberta else f"Nova pendência do {nome()}"
+    acao = acao_da_regra or f"ver a pendência no {nome()}"
     texto = _texto(pendencia, assunto, acao)
     assunto_completo = f"{assunto}: {acao[:70]}"
     if not os.getenv("SMTP_HOST") or not destinatario:
@@ -94,7 +101,7 @@ def _teste() -> int:
         if not para:
             print(f"{var} vazio: sem e-mail para o {_PARA_QUEM[destino]}")
             continue
-        enviado = _enviar(para, "Teste do Heitor", f"Teste de envio do Heitor para o {_PARA_QUEM[destino]}.\n"
+        enviado = _enviar(para, f"Teste do {nome()}", f"Teste de envio do {nome()} para o {_PARA_QUEM[destino]}.\n"
                                                     "Se chegou, os avisos de pendência vão chegar aqui.\n")
         print(f"{'enviado' if enviado else 'FALHOU'}: {_PARA_QUEM[destino]} ({para})")
         ok &= enviado

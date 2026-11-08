@@ -133,7 +133,7 @@ def fechar_pendencia(
         return _json(mudar_status(pendencia_id, "fechada", nota or "reauditoria conferiu a correção"))
     p = mudar_status(pendencia_id, "reaberta", nota or "reauditoria não conferiu a correção")
     achado = estado.obter_achado(p.achado_id, p.auditoria_id)
-    notificar(p, assunto="Pendência reaberta pelo Heitor", acao_da_regra=achado.acao_sugerida if achado else None)
+    notificar(p, reaberta=True, acao_da_regra=achado.acao_sugerida if achado else None)
     return _json(p)
 
 

@@ -66,3 +66,12 @@ def test_sem_smtp_so_registra_no_log(client, monkeypatch):
     estado.criar_auditoria("au-z", [])
     ferramentas.criar_pendencia(_achado("au-z"), "rh", "x", date(2026, 11, 10))
     assert any("sem e-mail configurado" in r for r in registros) and enviar == []
+
+
+def test_nome_do_produto_no_email_e_configuravel(client, enviados, monkeypatch):
+    monkeypatch.setenv("HEITOR_NOME_NO_EMAIL", "Elmo")
+    estado.criar_auditoria("au-n", [])
+    ferramentas.criar_pendencia(_achado("au-n"), "rh", "x", date(2026, 11, 10))
+    [email] = enviados
+    assert email["assunto"].startswith("Nova pendência do Elmo")
+    assert "O Elmo aponta lacunas" in email["texto"] and "Heitor" not in email["texto"] + email["assunto"]
