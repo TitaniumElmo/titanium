@@ -70,6 +70,13 @@ _TEXTOS: dict[str, dict[str, Any]] = {
         "explicacao": "O intervalo entre as trocas passou da durabilidade indicada pelo fabricante.",
         "base": [SUMULA_289],
     },
+    "troca_passado": {
+        "titulo": "EPI usado além da vida útil (período já encerrado)",
+        "explicacao": "Entre duas entregas, o EPI ficou em uso além da durabilidade indicada pelo fabricante. "
+                      "A troca já foi feita, então não há o que corrigir agora: o período sem proteção adequada "
+                      "fica como passivo e entra na exposição.",
+        "base": [SUMULA_289],
+    },
     "treinamento_ausente": {
         "titulo": "Sem registro de treinamento",
         "explicacao": "Sem prova do treinamento exigido, a defesa fica muito fraca. A lista de presença "
