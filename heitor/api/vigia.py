@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from heitor.api import config, execucao, ferramentas
+from heitor.api.fotos import dono_da_foto
 from heitor.api.estado import estado
 from heitor.api.fontes import ArquivoFonte, Fonte, PastaDrive, PastaLocal
 from heitor.contrato import Linha
@@ -78,6 +79,10 @@ class Vigia:
         self._candidatos: dict[str, str] = {}  # arquivo -> assinatura vista uma vez, aguardando confirmar
         self._falhas: dict[str, str] = {}  # arquivo -> assinatura que falhou ao ler (só tenta de novo se mudar)
         self._linhas: dict[str, list[Linha]] = {}  # arquivo -> linhas lidas
+        # Foto de ficha de papel: não é lida como ficha (os dados vêm da planilha); só vai junto para o
+        # agente conferir as assinaturas. arquivo -> (nome, assinatura, caminho baixado)
+        self._fotos: dict[str, tuple[str, str, str]] = {}
+        self.fotos_sem_dono: list[str] = []
         self._hashes: dict[str, Counter] = {}  # funcionário -> hashes das entregas
         self.verificacoes = 0
         self.ultima_verificacao: Optional[datetime] = None
@@ -95,6 +100,8 @@ class Vigia:
             "aguardando_confirmar": len(self._candidatos),
             "arquivos_com_falha": len(self._falhas),
             "funcionarios": len(self._hashes),
+            "fotos": len(self._fotos),
+            "fotos_sem_dono": self.fotos_sem_dono,
             "ultimo_erro": self.ultimo_erro,
             "ultimo_disparo": self.ultimo_disparo,
         }
@@ -173,6 +180,7 @@ class Vigia:
         for i in removidos:
             self._processados.pop(i)
             self._linhas.pop(i, None)
+            self._fotos.pop(i, None)
         return removidos
 
     def _ler(self, a: ArquivoFonte) -> bool:
@@ -180,7 +188,7 @@ class Vigia:
         try:
             pasta = self.pasta_trabalho / hashlib.sha1(a.id.encode()).hexdigest()[:12]
             caminho = self.fonte.baixar(a, pasta)
-            linhas = execucao.ler_linhas(str(caminho))
+            linhas = [] if a.tipo == "foto" else execucao.ler_linhas(str(caminho))
         except Exception as exc:
             self._falhas[a.id] = a.assinatura
             self.ultimo_erro = f"ler {a.nome}: {type(exc).__name__}: {exc}"
@@ -188,9 +196,28 @@ class Vigia:
             return False
         self._falhas.pop(a.id, None)
         self._processados[a.id] = a.assinatura
-        self._linhas[a.id] = linhas
-        log.info("lido %s: %d linhas", a.nome, len(linhas))
+        if a.tipo == "foto":
+            self._fotos[a.id] = (a.nome, a.assinatura, str(caminho))
+            log.info("foto recebida: %s", a.nome)
+        else:
+            self._linhas[a.id] = linhas
+            log.info("lido %s: %d linhas", a.nome, len(linhas))
         return True
+
+    def _fotos_por_funcionario(self) -> dict[str, tuple[str, str]]:
+        """funcionário -> (assinatura, caminho) da foto dele. Ligação pela matrícula no nome do arquivo."""
+        funcionarios = {l.funcionario_id for ls in self._linhas.values() for l in ls}
+        ligadas, sem_dono = {}, []
+        for nome, assinatura, caminho in self._fotos.values():
+            dono = dono_da_foto(nome, funcionarios)
+            if dono is None:
+                sem_dono.append(nome)
+            else:
+                ligadas[dono] = (assinatura, caminho)
+        if sem_dono != self.fotos_sem_dono and sem_dono:
+            log.warning("foto sem funcionário na planilha (ponha a matrícula no nome): %s", ", ".join(sem_dono))
+        self.fotos_sem_dono = sem_dono
+        return ligadas
 
     def _linhas_por_funcionario(self) -> dict[str, list[Linha]]:
         grupos: dict[str, list[Linha]] = {}
@@ -201,6 +228,9 @@ class Vigia:
 
     def _funcionarios_que_mudaram(self) -> set[str]:
         novos = {f: Counter(hash_da_entrega(l) for l in ls) for f, ls in self._linhas_por_funcionario().items()}
+        for f, (assinatura, _) in self._fotos_por_funcionario().items():
+            if f in novos:  # foto nova ou trocada também muda o funcionário: ele é auditado com a foto
+                novos[f][f"foto:{assinatura}"] += 1
         mudaram = {f for f in novos.keys() | self._hashes.keys() if novos.get(f) != self._hashes.get(f)}
         self._hashes = novos
         return {f for f in mudaram if f in novos}  # quem sumiu da pasta não tem o que auditar
@@ -208,9 +238,10 @@ class Vigia:
     def _auditar(self, funcionarios: set[str], arquivos: list[str], origem: str) -> str:
         grupos = self._linhas_por_funcionario()
         linhas = [l for f in sorted(funcionarios) for l in _juntar(grupos[f])]
+        fotos = {f: caminho for f, (_, caminho) in self._fotos_por_funcionario().items() if f in funcionarios}
         auditoria_id = estado.novo_id("au")
         estado.criar_auditoria(auditoria_id, arquivos, disparado_por=origem)
-        execucao.em_segundo_plano(_auditar_e_conciliar, auditoria_id, linhas, origem)
+        execucao.em_segundo_plano(_auditar_e_conciliar, auditoria_id, linhas, origem, fotos)
         return auditoria_id
 
 
@@ -219,12 +250,16 @@ class Vigia:
 # ---------------------------------------------------------------------------
 
 
-def _auditar_e_conciliar(auditoria_id: str, linhas: list[Linha], origem: str) -> None:
-    execucao.auditar_linhas(auditoria_id, linhas, origem)
+def _auditar_e_conciliar(auditoria_id: str, linhas: list[Linha], origem: str, fotos: dict[str, str]) -> None:
+    execucao.auditar_linhas(auditoria_id, linhas, origem, fotos=fotos)
     try:
         conciliar(auditoria_id, linhas)
     except Exception:
         log.exception("conciliação da auditoria %s falhou", auditoria_id)
+
+
+# auditar_ficha (agente do PR #6) roda as regras de linha e da ficha inteira numa chamada só.
+_AUDITA_TUDO = "auditar_ficha"
 
 
 def _ferramenta_da_regra(linha: Optional[int]) -> str:
@@ -256,7 +291,7 @@ def conciliar(auditoria_id: str, linhas: list[Linha]) -> list[dict[str, str]]:
             chave = ferramentas._chave_do_problema(achado)
             if chave in problemas_atuais:
                 continue  # o problema continua: a pendência fica como está
-            if (f, _ferramenta_da_regra(achado.linha)) not in rodou:
+            if (f, _ferramenta_da_regra(achado.linha)) not in rodou and (f, _AUDITA_TUDO) not in rodou:
                 motivo, fechar = "a auditoria nova não conferiu esta regra; pendência mantida", False
             elif chave[1] == "entrega" and (f, *chave[2:]) not in entregas:
                 motivo, fechar = "a entrega original não está mais na ficha; apagar linha antiga não corrige", False

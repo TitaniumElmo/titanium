@@ -39,6 +39,10 @@ Regra = Literal[
     # O agente usa quando não consegue decidir; viram pendência de revisão.
     "falha_de_ferramenta",  # ferramenta falhou duas vezes
     "funcao_desconhecida",  # função fora da tabela função -> EPI
+    # Ficha de papel conferida contra a planilha (decisão do time: sempre risco, nunca irregular).
+    "entrega_sem_ficha",  # está na planilha e não no papel
+    "ficha_sem_planilha",  # está no papel e não na planilha
+    "leitura_incerta",  # CA, data ou assinatura em dúvida na foto: conferir na ficha física
 ]
 
 # PROPOSTA: separa chamada de ferramenta, decisão do LLM e falha no log.

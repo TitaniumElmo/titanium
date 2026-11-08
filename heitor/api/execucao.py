@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
-from heitor.api import ferramentas, integracao
+from heitor.api import ferramentas, fotos as modulo_fotos, integracao
 from heitor.api.estado import estado
 from heitor.contrato import Achado, Evento, Linha, Pendencia
 
@@ -115,27 +115,48 @@ def em_segundo_plano(fn: Callable[..., Any], *args: Any) -> None:
     _executor.submit(fn, *args)
 
 
-def iniciar_auditoria(auditoria_id: str, arquivos: list[str]) -> None:
-    _executor.submit(rodar_auditoria, auditoria_id, arquivos)
+def iniciar_auditoria(auditoria_id: str, arquivos: list[str], fotos: Optional[list[tuple[str, Optional[str]]]] = None) -> None:
+    _executor.submit(rodar_auditoria, auditoria_id, arquivos, fotos or [])
 
 
-def iniciar_auditoria_linhas(auditoria_id: str, linhas: list[Linha], disparado_por: Optional[str] = None) -> None:
-    """Para quem já leu as linhas (o vigia da pasta)."""
-    _executor.submit(auditar_linhas, auditoria_id, linhas, disparado_por)
+def rodar_auditoria(auditoria_id: str, arquivos: list[str], fotos: Optional[list[tuple[str, Optional[str]]]] = None) -> None:
+    """arquivos: planilhas (fonte dos dados). fotos: (caminho, funcionario_id informado ou None).
 
-
-def rodar_auditoria(auditoria_id: str, arquivos: list[str]) -> None:
-    linhas = []
+    Foto enviada em `arquivos` também conta como foto: ela nunca é lida como ficha.
+    """
+    linhas, pares = [], list(fotos or [])
     for arquivo in arquivos:
+        if modulo_fotos.eh_foto(arquivo):
+            pares.append((arquivo, None))
+            continue
         try:
             linhas += _ler(arquivo, auditoria_id)
         except Exception as exc:
             log.exception("falha ao ler %s", arquivo)
             _erro(auditoria_id, None, f"extrair_ficha({Path(arquivo).name})", exc)
-    auditar_linhas(auditoria_id, linhas)
+    auditar_linhas(auditoria_id, linhas, fotos=ligar_fotos(auditoria_id, linhas, pares))
 
 
-def auditar_linhas(auditoria_id: str, linhas: list[Linha], disparado_por: Optional[str] = None) -> None:
+def ligar_fotos(auditoria_id: str, linhas: list[Linha], pares: list[tuple[str, Optional[str]]]) -> dict[str, str]:
+    """{funcionario_id: caminho da foto}. Foto sem dono reconhecido vira um aviso no log."""
+    funcionarios = {l.funcionario_id for l in linhas}
+    ligadas: dict[str, str] = {}
+    for caminho, informado in pares:
+        dono = modulo_fotos.dono_da_foto(Path(caminho).name, funcionarios, informado)
+        if dono is None:
+            emitir_evento(auditoria_id, {
+                "passo": 0, "tipo": "erro", "ferramenta": "ligar_foto",
+                "entrada": {"foto": Path(caminho).name, "funcionario_id": informado},
+                "saida": "foto sem funcionário na planilha: informe o funcionario_id ou ponha a matrícula no nome do arquivo",
+            })
+            continue
+        ligadas[dono] = caminho
+    return ligadas
+
+
+def auditar_linhas(
+    auditoria_id: str, linhas: list[Linha], disparado_por: Optional[str] = None, fotos: Optional[dict[str, str]] = None
+) -> None:
     token = ferramentas.auditoria_atual.set(auditoria_id)
     try:
         if disparado_por:
@@ -148,12 +169,16 @@ def auditar_linhas(auditoria_id: str, linhas: list[Linha], disparado_por: Option
 
         # Sem retentativa aqui: repetir o agente inteiro duplicaria eventos.
         # A retentativa por ferramenta é responsabilidade do laço do agente.
-        resultado = integracao.rodar_auditoria(auditoria_id, linhas, _emissor(auditoria_id))
+        if fotos:  # o agente decide, por funcionário, se vale conferir a ficha de papel
+            resultado = integracao.conferir_e_auditar(auditoria_id, linhas, fotos, _emissor(auditoria_id))
+        else:
+            resultado = integracao.rodar_auditoria(auditoria_id, linhas, _emissor(auditoria_id))
         for a in _achados(resultado, auditoria_id):
             estado.salvar_achado(a)
         extras = {}
         if isinstance(resultado, dict):
-            extras = {k: resultado.get(k) for k in ("exposicao", "relatorio", "modo") if resultado.get(k) is not None}
+            campos = ("exposicao", "relatorio", "modo", "modo_por_funcionario", "custo_usd")
+            extras = {k: resultado.get(k) for k in campos if resultado.get(k) is not None}
         estado.atualizar_auditoria(auditoria_id, status="concluida", concluida_em=datetime.now(), **extras)
     except Exception as exc:
         log.exception("auditoria %s falhou", auditoria_id)

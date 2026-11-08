@@ -226,6 +226,19 @@ def rodar_auditoria(auditoria_id: str, linhas: list[Linha], emitir_evento: Calla
     return achados
 
 
+def conferir_e_auditar(
+    auditoria_id: str, linhas: list[Linha], fotos: dict[str, str], emitir_evento: Callable[[Evento], None]
+) -> list[Achado]:
+    """Stub: audita só a planilha. As fotos ficam registradas no log, sem conferência."""
+    if fotos:
+        emitir_evento(Evento(
+            auditoria_id=auditoria_id, passo=0, tipo="decisao", ferramenta=None,
+            entrada={"fotos": {f: Path(c).name for f, c in fotos.items()}},
+            saida="stub: a conferência da ficha de papel precisa do agente real", ts=datetime.now(),
+        ))
+    return rodar_auditoria(auditoria_id, linhas, emitir_evento)
+
+
 def reauditar(pendencia_id: str, linhas: list[Linha], emitir_evento: Optional[Callable[[Evento], None]] = None) -> list[Achado]:
     """Reaplica as regras às linhas novas e fecha ou reabre a pendência.
 

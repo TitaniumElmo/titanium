@@ -23,7 +23,9 @@ class Auditoria(BaseModel):
     # Vindos do resultado de rodar_auditoria (agente), quando ele devolve.
     exposicao: Optional[dict[str, Any]] = None  # {"total_brl", "salario_minimo", ...}
     relatorio: Optional[dict[str, Any]] = None  # {"itens", "texto", ...}
-    modo: Optional[str] = None  # "llm" ou "deterministico"
+    modo: Optional[str] = None  # "llm" | "misto" (algum funcionário sem LLM) | "deterministico"
+    modo_por_funcionario: Optional[dict[str, str]] = None  # funcionário -> "llm" | "degradado" | "deterministico"
+    custo_usd: Optional[float] = None  # custo do LLM informado pelo agente (a auditoria toda)
 
 
 class ResumoAuditoria(Auditoria):
