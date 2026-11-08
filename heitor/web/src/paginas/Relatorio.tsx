@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAgora, useMundo } from "../api";
 import { Botao, Cartao, EstadoVazio } from "../componentes/base";
@@ -213,8 +214,19 @@ function CartaoPendencias({ p }: { p: TipoRelatorio["pendencias"] }) {
 
 export function Relatorio() {
   const mundo = useMundo();
-  const { periodo } = useEstado();
+  const { periodo, setPeriodo } = useEstado();
+  const [parametros, setParametros] = useSearchParams();
   const hoje = isoDia(useAgora(60_000));
+  const pedirPdf = parametros.get("pdf") === "1";
+  useEffect(() => {
+    if (!pedirPdf) return;
+    setPeriodo("7d");
+    const id = window.setTimeout(() => {
+      setParametros({}, { replace: true });
+      window.print();
+    }, 700);
+    return () => window.clearTimeout(id);
+  }, [pedirPdf, setPeriodo, setParametros]);
   const rel = useMemo(() => gerarRelatorio(mundo, hoje, DIAS_DO_PERIODO[periodo]), [mundo, hoje, periodo]);
 
   if (!mundo.fonte) {

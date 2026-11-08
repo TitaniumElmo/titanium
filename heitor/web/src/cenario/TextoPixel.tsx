@@ -36,6 +36,7 @@ const GLIFOS: Record<string, string[]> = {
   "8": ["###", "#.#", "###", "#.#", "###"],
   "9": ["###", "#.#", "###", "..#", "##."],
   " ": ["...", "...", "...", "...", "..."],
+  "·": ["...", "...", ".#.", "...", "..."],
 };
 
 const SEM_ACENTO: Record<string, string> = { Á: "A", Ã: "A", Â: "A", É: "E", Ê: "E", Í: "I", Ó: "O", Õ: "O", Ô: "O", Ú: "U", Ç: "C" };
@@ -44,7 +45,21 @@ export function larguraTexto(texto: string): number {
   return Math.max(0, texto.length * 4 - 1);
 }
 
-export function TextoPixel({ texto, x, y, cor }: { texto: string; x: number; y: number; cor: string }) {
+export function TextoPixel({
+  texto,
+  x,
+  y,
+  cor,
+  escala = 1,
+  z = 6,
+}: {
+  texto: string;
+  x: number;
+  y: number;
+  cor: string;
+  escala?: number;
+  z?: number;
+}) {
   const letras = texto
     .toUpperCase()
     .split("")
@@ -66,10 +81,10 @@ export function TextoPixel({ texto, x, y, cor }: { texto: string; x: number; y: 
     <svg
       aria-hidden
       viewBox={`0 0 ${largura} 5`}
-      width={largura}
-      height={5}
+      width={largura * escala}
+      height={5 * escala}
       shapeRendering="crispEdges"
-      style={{ position: "absolute", left: x, top: y }}
+      style={{ position: "absolute", left: x, top: y, zIndex: z }}
     >
       <path d={caminho} fill={cor} />
     </svg>

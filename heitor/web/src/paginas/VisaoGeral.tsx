@@ -6,12 +6,14 @@ import { CartaoExposicao } from "../componentes/CartaoExposicao";
 import { Pagina } from "../componentes/Pagina";
 import { SeloGatilho } from "../componentes/Selos";
 import { achadoAberto, cronograma, relatorio } from "../derivados";
-import { dataCurta, diaDaSemana, dolares, hora, isoDia } from "../formato";
+import { dataCurta, diaDaSemana, dolares, hora, isoDia, tituloLimpo } from "../formato";
 import { NOME_AGENTE } from "../marca";
 import type { Gravidade } from "../tipos";
 import { cn, IconeGrade } from "../util";
 
 const DIA = 86_400_000;
+const FUNDO_PRETO = "bg-superficie bg-[radial-gradient(120%_90%_at_100%_0%,var(--cartao-brilho),transparent_60%)]";
+const FUNDO_URGENTE = "bg-gradient-to-b from-cartao-urgente-topo via-cartao-urgente-meio to-cartao-urgente-base";
 
 const ESTILO_CARTAO: Record<Gravidade, { ponto: string; rotulo: string; ajuda: string }> = {
   irregular: { ponto: "bg-irregular-borda", rotulo: "Irregular", ajuda: "achados em aberto" },
@@ -74,54 +76,62 @@ export function VisaoGeral() {
 
   return (
     <Pagina titulo="Visão geral" comPeriodo>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {(["irregular", "risco", "ok"] as Gravidade[]).map((g) => (
-          <Link
-            key={g}
-            to={g === "ok" ? "/funcionarios" : "/achados"}
-            className="rounded-cartao border border-borda bg-superficie p-5 transition-colors hover:border-fraco"
-          >
-            <span className="flex items-center gap-2 text-sm text-apoio">
-              <span className={cn("size-2 rounded-full", ESTILO_CARTAO[g].ponto)} />
-              {ESTILO_CARTAO[g].rotulo}
-            </span>
-            <span className="mt-2 block text-display tabular-nums">{dados.contagem[g]}</span>
-            <span className="text-xs text-fraco">{ESTILO_CARTAO[g].ajuda}</span>
-          </Link>
-        ))}
-        <CartaoExposicao total={dados.rel.exposicao_total} porFuncao={dados.rel.exposicao_por_funcao.slice(0, 2)} />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+          <section aria-label="Situação das fichas" className="grid grid-cols-3 gap-2 sm:gap-3">
+            {(["irregular", "risco", "ok"] as Gravidade[]).map((g) => {
+              const urgente = g === "irregular" && dados.contagem[g] > 0;
+              return (
+                <Link
+                  key={g}
+                  to={g === "ok" ? "/funcionarios" : "/achados"}
+                  className={cn(
+                    "flex min-w-0 flex-col gap-2 rounded-cartao border border-borda p-3 transition-colors hover:border-fraco focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento sm:gap-3 sm:p-5",
+                    urgente ? FUNDO_URGENTE : FUNDO_PRETO,
+                  )}
+                >
+                  <span className={cn("text-xs font-semibold uppercase tracking-sobrescrito sm:text-sm", urgente ? "text-irregular" : "text-apoio")}>
+                    {ESTILO_CARTAO[g].rotulo}
+                  </span>
+                  <span className={cn("inline-flex w-fit items-center rounded-full px-3 py-1.5 sm:px-4 sm:py-2", urgente ? "bg-selo-claro text-selo-claro-texto" : "bg-superficie-2 text-texto")}>
+                    <span className="text-2xl font-semibold tabular-nums sm:text-3xl sm:leading-none">{dados.contagem[g]}</span>
+                  </span>
+                  <span className="text-xs leading-snug text-apoio sm:text-base">{ESTILO_CARTAO[g].ajuda}</span>
+                </Link>
+              );
+            })}
+          </section>
+
+          <Cartao className={cn("flex flex-1 flex-col gap-4 sm:p-6", FUNDO_PRETO)}>
+            <div>
+              <h2 className="text-base font-semibold sm:text-lg">Funil do ciclo</h2>
+              <p className="text-sm text-apoio sm:text-base">Onde cada pendência está, do achado à conferência.</p>
+            </div>
+            <ol className="grid grid-cols-2 gap-3">
+              {dados.funil.map((f, i) => (
+                <li key={f.rotulo} className="flex flex-col gap-2 rounded-controle bg-superficie-2 p-3 sm:p-4">
+                  <span className="flex items-center justify-between gap-2 text-sm text-apoio">
+                    <span>{f.rotulo}</span>
+                    <span className="tabular-nums text-fraco">{i + 1}/4</span>
+                  </span>
+                  <span className="text-h1 tabular-nums">{f.valor}</span>
+                  <span className="h-1.5 overflow-hidden rounded-full bg-borda">
+                    <span className={cn("block h-full rounded-full", i === 3 ? "bg-ok-borda" : "bg-apoio")} style={{ width: `${(f.valor / maiorFunil) * 100}%` }} />
+                  </span>
+                  <span className="text-sm text-fraco">{f.ajuda}</span>
+                </li>
+              ))}
+            </ol>
+          </Cartao>
+        </div>
+        <CartaoExposicao total={dados.rel.exposicao_total} porFuncao={dados.rel.exposicao_por_funcao.slice(0, 2)} className="lg:self-start" />
       </div>
 
-      <Cartao className="flex flex-col gap-4">
-        <div>
-          <h2 className="text-h3">Funil do ciclo</h2>
-          <p className="text-sm text-apoio">Onde cada pendência está, do achado à conferência.</p>
-        </div>
-        <ol className="grid gap-3 md:grid-cols-4">
-          {dados.funil.map((f, i) => (
-            <li key={f.rotulo} className="flex flex-col gap-2 rounded-controle bg-superficie-2 p-3">
-              <span className="flex items-center justify-between text-xs text-apoio">
-                <span>{f.rotulo}</span>
-                <span className="tabular-nums text-fraco">{i + 1}/4</span>
-              </span>
-              <span className="text-h1 tabular-nums">{f.valor}</span>
-              <span className="h-1.5 overflow-hidden rounded-full bg-borda">
-                <span
-                  className={cn("block h-full rounded-full", i === 3 ? "bg-ok-borda" : "bg-apoio")}
-                  style={{ width: `${(f.valor / maiorFunil) * 100}%` }}
-                />
-              </span>
-              <span className="text-xs text-fraco">{f.ajuda}</span>
-            </li>
-          ))}
-        </ol>
-      </Cartao>
-
       <div className="grid gap-4 lg:grid-cols-2">
-        <Cartao className="flex flex-col gap-3">
+        <Cartao className={cn("flex flex-col gap-3 sm:p-6", FUNDO_PRETO)}>
           <div className="flex items-center justify-between">
-            <h2 className="text-label">Próximos 7 dias</h2>
-            <Link to="/cronograma" className="text-label text-apoio hover:text-texto">
+            <h2 className="text-base font-semibold sm:text-lg">Próximos 7 dias</h2>
+            <Link to="/cronograma" className="text-sm text-apoio hover:text-texto">
               cronograma →
             </Link>
           </div>
@@ -130,13 +140,13 @@ export function VisaoGeral() {
           ) : (
             <ul className="flex flex-col">
               {dados.proximos.slice(0, 6).map((item) => (
-                <li key={item.id} className="grid grid-cols-[5.5rem_1fr] gap-3 border-t border-borda py-2.5 text-sm first:border-t-0">
+                <li key={item.id} className="grid grid-cols-[6rem_1fr] gap-3 border-t border-borda py-3 text-sm first:border-t-0 sm:text-base">
                   <span className={cn("font-mono text-xs", item.status === "atrasado" ? "text-irregular" : "text-apoio")}>
                     {diaDaSemana(item.data)}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate">{item.titulo}</span>
-                    <span className="block text-xs text-fraco">{item.nome ?? item.funcao}</span>
+                    <span className="block truncate">{tituloLimpo(item.titulo)}</span>
+                    <span className="block text-sm text-apoio">{item.nome ?? item.funcao}</span>
                   </span>
                 </li>
               ))}
@@ -144,27 +154,27 @@ export function VisaoGeral() {
           )}
         </Cartao>
 
-        <Cartao className="flex flex-col gap-3">
-          <h2 className="text-label">Última execução do agente</h2>
+        <Cartao className={cn("flex flex-col gap-3 sm:p-6", FUNDO_PRETO)}>
+          <h2 className="text-base font-semibold sm:text-lg">Última execução do agente</h2>
           {ultima ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <SeloGatilho gatilho={ultima.disparado_por} comPrefixo />
               </div>
-              <p className="text-sm text-apoio">{ultima.descricao_disparo}</p>
-              <dl className="grid grid-cols-3 gap-3">
+              <p className="text-sm text-apoio sm:text-base">{ultima.descricao_disparo}</p>
+              <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-controle bg-superficie-2 px-3 py-2">
-                  <dt className="text-xs text-fraco">Hora</dt>
+                  <dt className="text-sm text-apoio">Hora</dt>
                   <dd className="font-mono text-sm">
                     {dataCurta(ultima.iniciada_em)} {hora(ultima.iniciada_em)}
                   </dd>
                 </div>
                 <div className="rounded-controle bg-superficie-2 px-3 py-2">
-                  <dt className="text-xs text-fraco">Passos</dt>
+                  <dt className="text-sm text-apoio">Passos</dt>
                   <dd className="font-mono text-sm">{eventosUltima.length}</dd>
                 </div>
                 <div className="rounded-controle bg-superficie-2 px-3 py-2">
-                  <dt className="text-xs text-fraco">Custo</dt>
+                  <dt className="text-sm text-apoio">Custo</dt>
                   <dd className="font-mono text-sm">{dolares(eventosUltima.reduce((s, e) => s + e.custo_usd, 0))}</dd>
                 </div>
               </dl>

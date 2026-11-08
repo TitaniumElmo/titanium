@@ -3,22 +3,15 @@ import { useSearchParams } from "react-router-dom";
 import { useAgora, useMundo } from "../api";
 import { EstadoVazio, Segmentos } from "../componentes/base";
 import { CartaoAchado } from "../componentes/CartaoAchado";
+import { CartaoAba } from "../componentes/ResumoHistorico";
 import { CicloPendencia } from "../componentes/CicloPendencia";
 import { Pagina } from "../componentes/Pagina";
 import { SeloDestino, SeloEscalado, SeloGatilho, SeloStatus, SeloUrgente } from "../componentes/Selos";
 import { ehUrgente } from "../derivados";
-import { data, dataCurta, hora, isoDia, ROTULO_ETAPA, ROTULO_GATILHO, ROTULO_STATUS } from "../formato";
+import { data, dataCurta, hora, isoDia, ROTULO_ETAPA, ROTULO_GATILHO, ROTULO_STATUS, rotuloRegra } from "../formato";
 import { NOME_AGENTE } from "../marca";
 import type { Destino, Pendencia, StatusPendencia } from "../tipos";
-import { cn, IconeFechar, IconeLista } from "../util";
-
-const ABAS: StatusPendencia[] = ["aberta", "aguardando", "fechada", "reaberta"];
-const ROTULO_ABA: Record<StatusPendencia, string> = {
-  aberta: "Abertas",
-  aguardando: "Aguardando",
-  fechada: "Fechadas",
-  reaberta: "Reabertas",
-};
+import { cn, IconeAlerta, IconeAtividade, IconeCalendario, IconeFechar, IconeLista } from "../util";
 
 function useRecemFechadas(pendencias: Pendencia[]): Map<string, StatusPendencia> {
   const anterior = useRef<Map<string, StatusPendencia>>(new Map(pendencias.map((p) => [p.id, p.status])));
@@ -67,13 +60,15 @@ function LinhaPendencia({
   recemFechada: boolean;
   aoAbrir: () => void;
 }) {
+  const mundo = useMundo();
+  const achado = mundo.achados.find((a) => a.id === p.achado_id);
   return (
     <li>
       <button
         type="button"
         onClick={aoAbrir}
         className={cn(
-          "grid w-full gap-3 rounded-cartao border border-borda bg-superficie p-4 text-left transition-colors hover:border-fraco md:grid-cols-[1fr_auto] md:items-center",
+          "grid w-full gap-3 rounded-cartao border border-borda bg-superficie bg-[radial-gradient(120%_90%_at_100%_0%,var(--cartao-brilho),transparent_60%)] p-4 text-left transition-colors hover:border-fraco sm:p-5 md:grid-cols-[1fr_auto] md:items-center",
           (p.prioridade === "alta" || ehUrgente(p, hoje)) && "border-l-4 border-l-irregular-borda hover:border-l-irregular-borda",
           recemFechada && "animar-fechada",
         )}
@@ -89,7 +84,13 @@ function LinhaPendencia({
               <span className="rounded-selo border border-ok-borda/40 bg-ok-fundo px-2 py-0.5 text-xs font-medium text-ok">fechada ✓</span>
             )}
           </div>
-          <p className="mt-1 line-clamp-2 text-sm text-apoio" title={p.acao}>{p.acao}</p>
+          <p className="mt-1 line-clamp-2 text-sm text-texto sm:text-base" title={p.acao}>{p.acao}</p>
+          {achado && (
+            <p className="mt-2 line-clamp-2 text-sm text-apoio" title={achado.evidencia}>
+              <span className="font-medium text-texto">Por quê: </span>
+              {rotuloRegra(achado.regra)} · {achado.evidencia}
+            </p>
+          )}
           <p className="mt-1.5 text-xs text-fraco">Disparado por: {ROTULO_GATILHO[p.disparado_por]}</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:justify-end">
@@ -269,13 +270,21 @@ export function Pendencias() {
           </span>
         </div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Segmentos
-          rotulo="Status"
-          valor={aba}
-          aoMudar={setAba}
-          opcoes={ABAS.map((s) => ({ valor: s, rotulo: `${ROTULO_ABA[s]} · ${contagem(s)}` }))}
+      <section role="radiogroup" aria-label="Status" className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+        <CartaoAba rotulo="Abertas" valor={contagem("aberta")} detalhe="ainda sem correção" selecionado={aba === "aberta"} aoClicar={() => setAba("aberta")} icone={<IconeLista className="size-full" />} />
+        <CartaoAba rotulo="Aguardando" valor={contagem("aguardando")} detalhe="conferindo na próxima leitura" selecionado={aba === "aguardando"} aoClicar={() => setAba("aguardando")} icone={<IconeCalendario className="size-full" />} />
+        <CartaoAba
+          rotulo="Reabertas"
+          valor={contagem("reaberta")}
+          detalhe="correção não confirmada"
+          urgente={contagem("reaberta") > 0}
+          selecionado={aba === "reaberta"}
+          aoClicar={() => setAba("reaberta")}
+          icone={<IconeAlerta className="size-full" />}
         />
+        <CartaoAba rotulo="Fechadas" valor={contagem("fechada")} detalhe="o problema sumiu na planilha" selecionado={aba === "fechada"} aoClicar={() => setAba("fechada")} icone={<IconeAtividade className="size-full" />} />
+      </section>
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmentos
           rotulo="Destino"
           valor={destino}

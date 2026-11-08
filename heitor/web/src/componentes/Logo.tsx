@@ -4,7 +4,7 @@ import { cn } from "../util";
 
 const COR_DO_TOM: Record<Tom, string> = {
   base: "var(--acento)",
-  crista: "var(--acento-forte)",
+  crista: "var(--intro-crista)",
   aba: "var(--intro-sombra)",
   luz: "var(--intro-luz)",
 };

@@ -101,6 +101,11 @@ export function diaDaSemana(valor: string | number | Date): string {
   return paraData(valor).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
 }
 
+export function tituloLimpo(titulo: string): string {
+  const sem = titulo.replace(/^Prazo da pendência [^:]+:\s*/i, "");
+  return sem.charAt(0).toUpperCase() + sem.slice(1);
+}
+
 export function reais(valor: number): string {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }

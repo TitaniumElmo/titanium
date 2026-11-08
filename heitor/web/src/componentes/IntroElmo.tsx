@@ -117,7 +117,7 @@ export function IntroElmo({ aoTerminar }: { aoTerminar: () => void }) {
     const blocos = gerarBlocos();
     const cores: Record<Tom, string> = {
       base: lerCor("acento"),
-      crista: lerCor("acento-forte"),
+      crista: lerCor("intro-crista"),
       aba: lerCor("intro-sombra"),
       luz: lerCor("intro-luz"),
     };
