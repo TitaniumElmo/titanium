@@ -94,6 +94,8 @@ class HistoricoPendencia(BaseModel):
     status: StatusPendencia
     ts: datetime
     nota: Optional[str] = None
+    etapa: Optional[str] = None  # encontrar, buscar_prova, pedir_correcao, corrigir, comprovar, conferir, cobrar_atraso
+    ator: Optional[Literal["agente", "tecnico", "rh"]] = None
 
 
 class Pendencia(BaseModel):
@@ -109,6 +111,11 @@ class Pendencia(BaseModel):
     prazo: date
     status: StatusPendencia = "aberta"
     historico: list[HistoricoPendencia] = Field(default_factory=list)
+    funcionario_nome: Optional[str] = None
+    disparado_por: Optional[str] = None  # código da auditoria que originou a pendência
+    cobrancas: int = 0
+    escalada: bool = False
+    prioridade: Literal["normal", "alta"] = "normal"
 
 
 class Evento(BaseModel):

@@ -53,18 +53,31 @@ def _texto(p: Pendencia, assunto: str, acao: str) -> str:
     )
 
 
-def notificar(pendencia: Pendencia, reaberta: bool = False, acao_da_regra: Optional[str] = None) -> None:
+def notificar(
+    pendencia: Pendencia,
+    reaberta: bool = False,
+    acao_da_regra: Optional[str] = None,
+    cobranca: int = 0,
+    coordenador: bool = False,
+) -> None:
     """acao_da_regra: a `acao_sugerida` do achado (texto das regras). Sem ela, vai uma ação genérica,
-    nunca o texto do LLM."""
-    destinatario = os.getenv(_DESTINATARIO_ENV[pendencia.destino])
-    assunto = f"Pendência reaberta pelo {nome()}" if reaberta else f"Nova pendência do {nome()}"
+    nunca o texto do LLM. cobranca > 0: pendência em atraso; coordenador=True manda também ao
+    HEITOR_EMAIL_COORDENADOR (sem ele, só registra)."""
+    if cobranca:
+        assunto = f"Cobrança {cobranca} do {nome()}: pendência em atraso"
+    else:
+        assunto = f"Pendência reaberta pelo {nome()}" if reaberta else f"Nova pendência do {nome()}"
     acao = acao_da_regra or f"ver a pendência no {nome()}"
     texto = _texto(pendencia, assunto, acao)
     assunto_completo = f"{assunto}: {acao[:70]}"
-    if not os.getenv("SMTP_HOST") or not destinatario:
-        log.info("[aviso para %s, sem e-mail configurado]\n%s", pendencia.destino, texto)
-        return
-    threading.Thread(target=_enviar, args=(destinatario, assunto_completo, texto), daemon=True).start()
+    alvos = [(pendencia.destino, os.getenv(_DESTINATARIO_ENV[pendencia.destino]))]
+    if coordenador:
+        alvos.append(("coordenador", os.getenv("HEITOR_EMAIL_COORDENADOR")))
+    for quem, destinatario in alvos:
+        if not os.getenv("SMTP_HOST") or not destinatario:
+            log.info("[aviso para %s, sem e-mail configurado]\n%s", quem, texto)
+            continue
+        threading.Thread(target=_enviar, args=(destinatario, assunto_completo, texto), daemon=True).start()
 
 
 def _enviar(destinatario: str, assunto: str, texto: str) -> bool:
