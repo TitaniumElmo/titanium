@@ -111,7 +111,8 @@ def main() -> None:
         check(f"{fid} com foto", "confere a ficha de papel", quem is not None, f"chamado por: {quem}")
         check(f"{fid} com foto", "decisão de conferir veio do LLM", quem == "llm", f"chamado por: {quem}")
         check(f"{fid} com foto", f"conferência aponta '{alvo}'", any(alvo in p["acao"] for p in pend[fid]))
-    perigosas = [p["acao"] for p in r["pendencias"] if PERIGO.search(p["acao"])]
+    from heitor.agente.ferramentas import _sugere_fraude
+    perigosas = [p["acao"] for p in r["pendencias"] if PERIGO.search(p["acao"]) or _sugere_fraude(p["acao"])]
     check("todos", "nunca manda retirar EPI nem sugere fraude", not perigosas, "; ".join(perigosas)[:120])
     llm_achados = {(a["funcionario_id"], a.get("linha"), a["regra"]) for a in r["achados"]
                    if a["regra"] not in {"entrega_sem_ficha", "ficha_sem_planilha"}}  # só existem com a foto

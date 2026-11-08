@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -20,6 +21,8 @@ from heitor.agente import stubs
 from heitor.agente.conferencia_datas import para_auditoria
 from heitor.agente.tipos import REGRAS_DO_CONTRATO
 from heitor.agente.tipos import AchadoDict as Achado, LinhaDict as Linha, PendenciaDict as Pendencia
+
+log = logging.getLogger(__name__)
 
 
 # ------------------------------------------------ funções reais ou stubs ---
@@ -458,7 +461,20 @@ def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, pr
     return p
 
 
-_FRAUDE = re.compile(r"(assinar|preencher|alterar|retroag|antedat).{0,40}(antig|passad|retroativ|anterior)", re.I)
+# Fraude = mexer num registro que já existe (assinar, preencher, alterar a entrega antiga). Duas partes na MESMA
+# oração: o verbo e um alvo no passado. A justificativa depois de ":" ou ", pois" não conta ("colher a assinatura:
+# a última troca foi em 01/12/2025" é legítimo). Barrar por engano é seguro: o texto vira a ação da regra.
+_FRAUDE_SEMPRE = re.compile(r"retroativ|retroag|antedat|data (anterior|passada|antiga)", re.I)
+_FRAUDE_VERBO = re.compile(
+    r"\bassin(ar|e|em|ando)\b"
+    r"|\b(colh|colet|peg|obt|obter|solicit|ped|pedir|recolh|providenci|consegu)\w*\s+(\w+\s+){0,3}assinatura"
+    r"|\b(preench|alter|complet|regulariz|rasur|acrescent|inser|inclu|reescrev|ajust)\w*", re.I)
+_MESES = r"(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)"
+_FRAUDE_PASSADO = re.compile(
+    r"\b(antig|passad|anterior)\w*|\blinhas?\s+\d"
+    rf"|\b{_MESES}\b|\b(\d{{1,2}}/)?(\d{{1,2}})/((19|20)?\d{{2}})\b|\b(19|20)\d{{2}}\b", re.I)
+_NEGACAO = re.compile(r"\b(n[ãa]o|nunca|jamais|sem|evitar|nem)\s+(\w+\s+){0,2}$", re.I)
+_SEPARA_ORACAO = re.compile(r"[.;:!?()\n]|\s[—–-]\s|,\s*(pois|porque|j[áa] que|uma vez que|ent[ãa]o|e a [úu]ltima)\b", re.I)
 
 
 _TIRA_PROTECAO = re.compile(
@@ -471,9 +487,44 @@ def _tira_protecao(texto: str) -> bool:
     return bool(_TIRA_PROTECAO.search(texto))
 
 
-def _sugere_fraude(texto: str) -> bool:
-    """Guarda-corpo: nunca pedir para preencher ou assinar ficha antiga com data passada."""
-    return bool(_FRAUDE.search(texto))
+def _data_no_passado(m: re.Match, hoje: date) -> bool:
+    """Data ou ano citado é passado? "até 12/11/2026" (prazo) não é; mês sozinho ("setembro") conta como passado."""
+    s = m.group(0)
+    if s.lower().startswith("linha"):
+        return True  # "preencher o CA da linha 5": a linha já existe
+    if re.fullmatch(r"\d{1,2}/\d{1,2}", s):  # dd/mm sem ano: ambíguo (pode ser o prazo)
+        return False
+    nums = [int(x) for x in re.findall(r"\d+", s)]
+    if not nums:
+        return True  # antiga, passada, linha N, nome do mês
+    ano = nums[-1] + (2000 if nums[-1] < 100 else 0)
+    if len(nums) == 1:
+        return ano < hoje.year
+    mes = nums[-2]
+    dia = nums[0] if len(nums) == 3 else 1
+    try:
+        return date(ano, mes, dia) < hoje
+    except ValueError:
+        return True
+
+
+def _sugere_fraude(texto: str, hoje: date | None = None) -> bool:
+    """Guarda-corpo: nunca pedir para assinar, preencher ou alterar um registro antigo da ficha."""
+    hoje = hoje or date.today()
+    for oracao in _SEPARA_ORACAO.split(texto or ""):
+        if not oracao or not oracao.strip():
+            continue
+        if _FRAUDE_SEMPRE.search(oracao) and not _NEGACAO.search(oracao[:_FRAUDE_SEMPRE.search(oracao).start()]):
+            return True
+        verbos = [v for v in _FRAUDE_VERBO.finditer(oracao) if not _NEGACAO.search(oracao[:v.start()])]
+        if not verbos:
+            continue
+        # "atualizar/alterar a planilha" é legítimo (a planilha é controle digital, não a prova assinada)
+        if re.search(r"planilha", oracao, re.I) and not re.search(r"ficha|papel", oracao, re.I):
+            continue
+        if any(_data_no_passado(p, hoje) for p in _FRAUDE_PASSADO.finditer(oracao)):
+            return True
+    return False
 
 
 def _t_terminei(ctx: Contexto, args: dict) -> Resultado:
@@ -542,6 +593,7 @@ def _falha_vira_revisao(ctx: Contexto, nome: str, erro: Exception | None) -> Res
     # Uma pendência de revisão por funcionário: sem a base CAEPI, auditar_ficha, audita_linha e a rede de
     # segurança falhariam todas, e o técnico receberia vários avisos iguais sobre a mesma ficha.
     id_revisao = f"rev-{ctx.funcionario_id}"
+    log.warning("ferramenta %s falhou duas vezes (funcionário %s): %r", nome, ctx.funcionario_id, erro)
     if id_revisao in ctx.achados:
         evidencia = ctx.achados[id_revisao]["evidencia"]
         return Resultado({"erro": evidencia, "pendencia_de_revisao": ctx.pendencia_por_achado.get(id_revisao),
@@ -549,7 +601,8 @@ def _falha_vira_revisao(ctx: Contexto, nome: str, erro: Exception | None) -> Res
     achado: Achado = {"id": id_revisao, "funcionario_id": ctx.funcionario_id,
                       "auditoria_id": ctx.auditoria_id,
                       "linha": None, "regra": "falha_de_ferramenta", "gravidade": "risco", "tipo": "corrigivel",
-                      "evidencia": f"{nome} falhou duas vezes: {type(erro).__name__}: {str(erro)[:150]}",
+                      # Só o tipo do erro: a mensagem pode trazer caminho do servidor e vai para a tela.
+                      "evidencia": f"{nome} falhou duas vezes ({type(erro).__name__ if erro else 'erro'})",
                       "acao_sugerida": "revisar manualmente esta ficha"}
     ctx.achados[achado["id"]] = achado
     ctx.revisao.append(achado["id"])
