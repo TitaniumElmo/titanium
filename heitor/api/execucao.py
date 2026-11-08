@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
-from heitor.api import ferramentas, fotos as modulo_fotos, integracao
+from heitor.api import ferramentas, fotos as modulo_fotos, integracao, notificacao
 from heitor.api.estado import estado
 from heitor.api.resumos import com_resumo
 from heitor.contrato import Achado, Evento, Linha, Pendencia
@@ -173,10 +173,12 @@ def auditar_linhas(
 
         # Sem retentativa aqui: repetir o agente inteiro duplicaria eventos.
         # A retentativa por ferramenta é responsabilidade do laço do agente.
-        if fotos:  # o agente decide, por funcionário, se vale conferir a ficha de papel
-            resultado = integracao.conferir_e_auditar(auditoria_id, linhas, fotos, _emissor(auditoria_id))
-        else:
-            resultado = integracao.rodar_auditoria(auditoria_id, linhas, _emissor(auditoria_id))
+        # Os avisos das pendências criadas nesta auditoria saem juntos no fim: um e-mail por destinatário.
+        with notificacao.agrupar(auditoria_id):
+            if fotos:  # o agente decide, por funcionário, se vale conferir a ficha de papel
+                resultado = integracao.conferir_e_auditar(auditoria_id, linhas, fotos, _emissor(auditoria_id))
+            else:
+                resultado = integracao.rodar_auditoria(auditoria_id, linhas, _emissor(auditoria_id))
         for a in _achados(resultado, auditoria_id):
             estado.salvar_achado(a)
         extras = {}

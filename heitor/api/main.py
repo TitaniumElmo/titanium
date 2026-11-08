@@ -19,7 +19,7 @@ load_dotenv()  # antes de importar o resto: config lê as variáveis de ambiente
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from heitor.api import config, integracao, vigia  # noqa: E402
+from heitor.api import cobranca, config, integracao, vigia  # noqa: E402
 from heitor.api.estado import estado  # noqa: E402
 from heitor.api.modelos import Auditoria  # noqa: E402
 from heitor.api.rotas import auditorias, ca, eventos, fontes, pendencias  # noqa: E402
@@ -32,7 +32,8 @@ log = logging.getLogger("heitor.main")
 @asynccontextmanager
 async def ciclo_de_vida(app: FastAPI):
     """Liga o vigia da pasta (gatilho 1) se houver fonte no .env. Se a fonte
-    falhar ao conectar, a API sobe mesmo assim (upload continua funcionando)."""
+    falhar ao conectar, a API sobe mesmo assim (upload continua funcionando).
+    Sem vigia, a cobrança de prazos vencidos (gatilho 2) roda num relógio próprio."""
     try:
         v = vigia.criar_da_config()
         if v:
@@ -40,9 +41,12 @@ async def ciclo_de_vida(app: FastAPI):
     except Exception:
         log.exception("vigia não iniciou; a API segue só com upload")
         v = None
+    relogio = None if v else cobranca.iniciar_relogio(config.COBRANCA_INTERVALO_S)
     yield
     if v:
         v.parar()
+    if relogio:
+        relogio.set()
 
 
 app = FastAPI(title="Heitor", description="Auditoria de fichas de EPI", version="0.1.0", lifespan=ciclo_de_vida)

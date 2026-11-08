@@ -20,3 +20,6 @@ DRIVE_PASTA = os.getenv("HEITOR_DRIVE_PASTA") or None
 DRIVE_CREDENCIAIS = os.path.expanduser(os.getenv("HEITOR_DRIVE_CREDENCIAIS", "~/.config/heitor/drive.json"))
 FONTE_PASTA = os.getenv("HEITOR_FONTE_PASTA") or None
 VIGIA_INTERVALO_S = float(os.getenv("HEITOR_VIGIA_INTERVALO", "10"))
+
+# Gatilho 2 sem vigia: a cada quantos segundos a cobrança de prazos vencidos roda.
+COBRANCA_INTERVALO_S = float(os.getenv("HEITOR_COBRANCA_INTERVALO", "60"))

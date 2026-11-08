@@ -18,15 +18,9 @@ def enviados(monkeypatch):
     monkeypatch.setenv("HEITOR_EMAIL_TECNICO", "tecnico@teste")
     monkeypatch.setenv("HEITOR_EMAIL_RH", "rh@teste")
 
-    class _ThreadNaHora:  # envia na hora, sem thread, para o teste ler
-        def __init__(self, target, args, daemon):
-            self.target, self.args = target, args
-
-        def start(self):
-            destinatario, assunto, texto = self.args
-            caixa.append({"para": destinatario, "assunto": assunto, "texto": texto})
-
-    monkeypatch.setattr(notificacao.threading, "Thread", _ThreadNaHora)
+    # Captura o que seria enviado, sem thread e sem SMTP (sem mexer no threading do processo).
+    monkeypatch.setattr(notificacao, "_disparar",
+                        lambda para, assunto, texto: caixa.append({"para": para, "assunto": assunto, "texto": texto}))
     return caixa
 
 

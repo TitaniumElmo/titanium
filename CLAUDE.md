@@ -73,7 +73,7 @@ Se o documento pedido ao RH não existir, o achado vira pendência ou passivo.
 - **O que o LLM decide (é por isso que é agente, não workflow):** o que investigar (`consulta_ca`, `historico_da_empresa`, `buscar_ca_proximo`), **se vale conferir a ficha de papel**, a **urgência** de cada correção (prazo de 1–2 dias para quem está sem proteção hoje) e o **texto da ação para o técnico**. Ficha limpa termina em ~2 passos; ficha suspeita é investigada.
 - **Objetivo do prompt (preventivo):** no histórico do funcionário (até 5 anos), descobrir o que precisa ser corrigido agora e dizer ao técnico o que fazer, até quando e por quê. O passivo vai para o relatório, não vira tarefa.
 - Um episódio por funcionário; até 3 funcionários em paralelo (`HEITOR_PARALELO`).
-- **Não é chatbot (decidido em 07/11):** o Heitor reage a acontecimentos, ninguém pergunta nada a ele. Quem percebe o acontecimento é **código comum, sem LLM** (o vigia da pasta, `heitor/api/vigia.py`); o agente só é acordado quando algo mudou. Gatilhos da demo: **1** mudança na pasta (pronto), **2** prazo de pendência vencendo e **7** resumo diário (a fazer).
+- **Não é chatbot (decidido em 07/11):** o Heitor reage a acontecimentos, ninguém pergunta nada a ele. Quem percebe o acontecimento é **código comum, sem LLM** (o vigia da pasta, `heitor/api/vigia.py`); o agente só é acordado quando algo mudou. Gatilhos da demo: **1** mudança na pasta (pronto), **2** prazo de pendência vencendo (pronto) e **7** resumo diário (a fazer).
 
 ### Guarda-corpos
 - Limite de **12 passos por funcionário** e de tempo total.
@@ -206,7 +206,7 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 | Método | Rota | O que faz | Usado em |
 |---|---|---|---|
 | POST | `/auditorias` | `arquivos` (planilhas: a fonte dos dados), `fotos` (fichas de papel) e `funcionarios_das_fotos` (id de cada foto, na mesma ordem; sem ele, vale a matrícula no nome do arquivo, ex.: `0302.jpg`). Com foto, chama `conferir_e_auditar`. Roda em segundo plano | Upload |
-| GET | `/auditorias` | Lista, a mais recente primeiro, com `disparado_por` (ex.: "mudança na pasta: fichas.csv") | Painel |
+| GET | `/auditorias` | Lista, a mais recente primeiro. `disparado_por` é um código (`alteracao_planilha` \| `upload` \| `manual` \| `prazo_vencido` \| `rotina`); o texto vai em `descricao_disparo` (ex.: "mudança na pasta: fichas.csv") | Painel |
 | GET | `/auditorias/{id}` | Status, contagem por gravidade, exposição total, `modo`, `modo_por_funcionario`, custo | Painel |
 | GET | `/auditorias/{id}/eventos` | **SSE** do log de uma auditoria (`event: evento` e `event: status`) | Log ao vivo |
 | GET | `/eventos` | **SSE com tudo o que o Heitor faz**, de todas as auditorias, inclusive as disparadas pelo vigia | Feed da tela principal |
@@ -232,6 +232,19 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 - **Nunca altera a pasta:** só lê.
 - **Tempo medido (Drive real):** ~22 s da edição até a auditoria (~15 s são o atraso do Google), mais 15 a 40 s do agente com LLM para 1 ou 2 funcionários.
 - O Google Sheets tira o zero da frente das matrículas (`0302` → `302`): formatar a coluna como texto. A ligação de foto ignora zeros à esquerda.
+- **"Edição detectada" no feed** (`GET /eventos`, `auditoria_id: "vigia"`): sai assim que a **versão** da planilha muda (~3 s), antes de o Google refletir o conteúdo; uma vez por edição.
+
+### Gatilho 2: cobrança de prazo vencido (`heitor/api/cobranca.py`)
+- Pendência aberta ou reaberta com prazo vencido é cobrada: no máximo **1 cobrança por dia**; na **2ª**, escala (prioridade alta e aviso também a `HEITOR_EMAIL_COORDENADOR`).
+- Roda a cada ciclo do vigia; **sem vigia** (deploy sem Drive), num relógio próprio a cada `HEITOR_COBRANCA_INTERVALO` s (padrão 60).
+- `HEITOR_PRAZO_TESTE=N` adianta o relógio N dias: **só para ensaio, nunca na demo** (faz tudo vencer de uma vez).
+
+### E-mail (`heitor/api/notificacao.py`)
+- **Canal decidido: e-mail** (Gmail próprio com senha de app; `.env.example` tem as variáveis). `python -m heitor.api.notificacao --teste` confere o envio.
+- **Um e-mail por destinatário por auditoria** (e por rodada de cobrança), com a lista das pendências, não um por pendência: o Gmail **bloqueia** conta nova que manda dezenas de e-mails em poucos minutos (aconteceu duas vezes em 07/11).
+- O e-mail leva a **ação da regra** (`acao_sugerida`), nunca o texto escrito pelo LLM (que fica na pendência e na tela).
+- `HEITOR_NOME_NO_EMAIL` (ex.: `Elmo`) muda só o nome do produto no texto do e-mail.
+- Os testes **nunca** falam com servidor de e-mail (fixture no `tests/conftest.py`).
 
 ---
 
@@ -303,12 +316,12 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 
 ## 12. Decisões em aberto
 
-- [ ] Canal do aviso ao técnico: e-mail **ou** Telegram (só um).
+- [x] Canal do aviso ao técnico: **e-mail** (um por destinatário por auditoria).
 - [ ] Desafio Tako (DP) ou só trilha geral? O produto é SST/jurídico preventivo.
 - [x] Tabela função → EPI: só ruído (NR-15, Anexos 1 e 2); EPI a mais não é falha.
 - [x] Base CAEPI: `RelatorioCA_20261107_114519.csv` em `dados/`.
 - [x] Foto: confere a assinatura contra a planilha (não é fonte de dados).
-- [x] Não é chatbot: gatilhos 1 (pasta do Drive, pronto), 2 (prazo vencendo) e 7 (resumo diário). O 4 (nova base CAEPI) está em avaliação.
+- [x] Não é chatbot: gatilhos 1 (pasta do Drive, pronto), 2 (prazo vencendo, pronto) e 7 (resumo diário, a fazer). O 4 (nova base CAEPI) está em avaliação.
 - [ ] Deploy: Hugging Face Spaces (grátis, 16 GB) ou Railway (~US$ 5/mês). A API usa ~400 MB com a base CAEPI.
 - [ ] Quem gera o conjunto de teste independente (com sujeira).
 - [ ] Preço: resposta de 3–4 consultorias de SST (pagariam pela auditoria contínua? quanto por trabalhador?).

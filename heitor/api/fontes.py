@@ -36,6 +36,9 @@ class ArquivoFonte:
     assinatura: str  # muda quando o conteúdo muda
     tipo: str  # "planilha" ou "foto"
     exportar: bool = False  # planilha do Google: baixa exportando a primeira aba em CSV
+    # Planilha do Google: a versão muda NA HORA da edição, antes de o CSV exportado mudar.
+    # O vigia usa para avisar "edição detectada" sem esperar o conteúdo.
+    versao: Optional[str] = None
 
 
 class Fonte(Protocol):
@@ -153,7 +156,7 @@ class PastaDrive:
             md5 = hashlib.md5(conteudo).hexdigest()
             visto_em = anterior[1] if anterior and anterior[0] == versao else agora
             self._planilhas[arquivo.id] = (versao, visto_em, md5, conteudo)
-        return ArquivoFonte(arquivo.id, arquivo.nome, f"conteudo:{md5}", arquivo.tipo, exportar=True)
+        return ArquivoFonte(arquivo.id, arquivo.nome, f"conteudo:{md5}", arquivo.tipo, exportar=True, versao=versao)
 
     @staticmethod
     def _converter(f: dict) -> Optional[ArquivoFonte]:

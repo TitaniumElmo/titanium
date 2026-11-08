@@ -83,6 +83,8 @@ class Vigia:
         self._processados: dict[str, str] = {}  # arquivo -> assinatura já lida
         self._candidatos: dict[str, str] = {}  # arquivo -> assinatura vista uma vez, aguardando confirmar
         self._falhas: dict[str, str] = {}  # arquivo -> assinatura que falhou ao ler (só tenta de novo se mudar)
+        self._versoes: dict[str, str] = {}  # planilha do Google -> última versão vista
+        self._avisado: dict[str, tuple] = {}  # arquivo -> edição já anunciada no feed (não repete)
         self._linhas: dict[str, list[Linha]] = {}  # arquivo -> linhas lidas
         # Foto de ficha de papel: não é lida como ficha (os dados vêm da planilha); só vai junto para o
         # agente conferir as assinaturas. arquivo -> (nome, assinatura, caminho baixado)
@@ -174,15 +176,28 @@ class Vigia:
     def _estaveis(self, arquivos: list[ArquivoFonte]) -> list[ArquivoFonte]:
         prontos = []
         for a in arquivos:
+            if a.versao:
+                anterior = self._versoes.get(a.id)
+                self._versoes[a.id] = a.versao
+                if anterior and anterior != a.versao and a.id in self._processados:
+                    # Planilha do Google: a versão mudou na hora; o CSV exportado ainda pode estar
+                    # velho por ~15 s. Avisa já, para a tela não ficar parada esperando o Google.
+                    self._avisar_edicao(a, ("versao", a.versao))
             if self._processados.get(a.id) == a.assinatura or self._falhas.get(a.id) == a.assinatura:
                 self._candidatos.pop(a.id, None)
             elif self._candidatos.get(a.id) == a.assinatura:
                 prontos.append(a)  # igual em duas verificações seguidas: parou de mudar
             else:
                 if a.id in self._processados:  # arquivo já lido mudou: ainda pode estar em edição
-                    self._edicao_detectada(a)
+                    self._avisar_edicao(a, ("versao", a.versao) if a.versao else ("conteudo", a.assinatura))
                 self._candidatos[a.id] = a.assinatura
         return prontos
+
+    def _avisar_edicao(self, a: ArquivoFonte, marca: tuple) -> None:
+        """Uma vez por edição: a versão nova e o conteúdo que chega depois são a mesma edição."""
+        if self._avisado.get(a.id) != marca:
+            self._avisado[a.id] = marca
+            self._edicao_detectada(a)
 
     def _edicao_detectada(self, a: ArquivoFonte) -> None:
         """Ainda não há auditoria: o evento vai no feed global (GET /eventos) com auditoria_id "vigia"."""
