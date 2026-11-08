@@ -17,6 +17,8 @@ Achados novos possíveis:
 
 from __future__ import annotations
 
+import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +29,8 @@ from heitor.agente.foto import (CONF_CONCORDA, CONF_DISCORDA, CONF_SO_UMA, MODEL
                                 PROMPT_ASSINATURAS, _imagem_b64, _perguntar, _texto_assinado)
 from heitor.agente.foto import ler_treinamento  # noqa: F401  (a ferramenta chama CAS.ler_treinamento; os testes trocam)
 from heitor.agente.llm import ClienteLLM
+
+log = logging.getLogger(__name__)
 
 PROMPT_GUIADO = """Esta é a foto da ficha de entrega de EPI de {nome}.
 Segundo a planilha de controle da empresa, estas entregas foram feitas:
@@ -53,6 +57,34 @@ def _br(data_iso: str | None) -> str:
 
 def _dict(x: Any) -> dict[str, Any]:
     return x.model_dump(mode="json") if hasattr(x, "model_dump") else dict(x)
+
+
+# Veto: um modelo de visão DIFERENTE lê a coluna de assinatura. A e B usam o mesmo modelo e às vezes erram juntos
+# ("completa o padrão": linha em branco entre linhas assinadas). O veto só tira uma assinatura (vira conferência
+# humana), nunca aceita uma. Medido em 08/11; desliga com HEITOR_VETO_ASSINATURA=off.
+MODELO_VETO = os.getenv("HEITOR_MODELO_VETO", "Qwen/Qwen3-VL-32B-Instruct")
+
+
+def veto_ligado() -> bool:
+    return os.getenv("HEITOR_VETO_ASSINATURA", "on").lower() not in ("off", "0", "false", "nao", "não")
+
+
+def _ler_veto(b64: str) -> tuple[list[dict[str, Any]], float]:
+    cliente = ClienteLLM(modelo=MODELO_VETO, reserva=MODELO_VETO, timeout_s=90, extra=False)
+    obj, custo = _perguntar(cliente, b64, PROMPT_ASSINATURAS, 800)
+    return [x for x in obj.get("linhas") or [] if isinstance(x, dict)], custo
+
+
+def aplicar_veto(linhas: list[dict[str, Any]], textos_veto: list[str | None]) -> list[int]:
+    """Linha aceita como assinada que o outro modelo lê em branco vira dúvida. Devolve as linhas vetadas."""
+    vetadas = []
+    for l, texto in zip(linhas, textos_veto):
+        if l.get("assinatura") is True and _texto_assinado(texto) is False:
+            l["assinatura"] = False  # como na discordância entre A e B: a falta é o que se confere
+            l.setdefault("confianca", {})["assinatura"] = CONF_DISCORDA
+            l.setdefault("leitura_assinatura", {})["veto"] = texto
+            vetadas.append(l.get("linha"))
+    return vetadas
 
 
 def _dia_mes(data_iso: str | None) -> str | None:
@@ -108,6 +140,10 @@ def conferir_assinaturas(arquivo: str | Path, linhas_planilha: list[Any]) -> dic
 
     lista = "\n".join(f"{i}. {_br(l.get('data'))} - {l.get('epi')} - qtd {l.get('qtd', 1)}"
                       + (f" - CA {l['ca']}" if l.get("ca") else "") for i, l in enumerate(linhas, start=1))
+    from concurrent.futures import ThreadPoolExecutor
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    futuro_veto = pool.submit(_ler_veto, b64) if veto_ligado() else None
     try:
         obj_a, custo = _perguntar(cliente, b64, PROMPT_GUIADO.format(nome=nome or "funcionário", lista=lista), 1200)
     except Exception:  # noqa: BLE001 — sem a pergunta guiada, tudo fica em dúvida
@@ -161,7 +197,17 @@ def conferir_assinaturas(arquivo: str | Path, linhas_planilha: list[Any]) -> dic
         l["assinatura_texto"] = texto_a
         l["leitura_assinatura"] = {"a": texto_a, "b": texto_b}
 
+    vetadas: list[int] = []
+    if futuro_veto is not None:
+        try:
+            lista_veto, custo_veto = futuro_veto.result()
+            custo += custo_veto
+            vetadas = aplicar_veto(linhas, _alinhar_b(linhas, lista_veto))
+        except Exception as e:  # noqa: BLE001 — o veto é extra: sem ele, fica como antes
+            log.warning("veto de assinatura falhou: %r", e)
+    pool.shutdown(wait=False)
+
     # Linha do papel fora da planilha: depende da leitura aberta (datas frágeis). Só serve para conferência.
     fora = [{"data": normalizar_data(x.get("data")), "epi": x.get("epi")} for x in fora_a
             if not any(_aparece_em(l, [x]) for l in linhas)]
-    return {"linhas": linhas, "fora_da_planilha": fora, "custo_usd": round(custo, 6)}
+    return {"linhas": linhas, "fora_da_planilha": fora, "custo_usd": round(custo, 6), "vetadas": vetadas}
