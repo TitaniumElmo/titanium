@@ -16,6 +16,7 @@ from heitor.api.estado import estado
 from heitor.api.modelos import Auditoria, ResumoAuditoria
 from heitor.api.uploads import checar_quantidade, salvar_upload
 from heitor.contrato import Achado, Gravidade, TipoAchado
+from heitor.dados.dias_sem_epi import dias_sem_epi_valido
 
 router = APIRouter(prefix="/auditorias", tags=["auditorias"])
 
@@ -92,6 +93,7 @@ def resumo(auditoria_id: str) -> ResumoAuditoria:
         pendencias_abertas=sum(p.status != "fechada" for p in pendencias),
         passos=sum(e.tipo != "erro" for e in eventos),
         custo_total_usd=round(sum(e.custo_usd for e in eventos), 6),
+        dias_sem_epi_valido_registrado=dias_sem_epi_valido(achados),
     )
 
 
