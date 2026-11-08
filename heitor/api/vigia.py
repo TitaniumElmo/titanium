@@ -308,6 +308,7 @@ def _auditar_e_conciliar(auditoria_id: str, linhas: list[Linha], origem: str, fo
 
 # auditar_ficha (agente do PR #6) roda as regras de linha e da ficha inteira numa chamada só.
 _AUDITA_TUDO = "auditar_ficha"
+_REGRAS_DE_DUVIDA = {"falha_de_ferramenta", "leitura_incerta"}
 
 
 def _ferramenta_da_regra(linha: Optional[int]) -> str:
@@ -328,6 +329,10 @@ def conciliar(auditoria_id: str, linhas: list[Linha]) -> list[dict[str, str]]:
         (l.funcionario_id, str(l.data), l.epi.strip().lower(), l.ca or "") for l in estado.obter_linhas(auditoria_id)
     }
 
+    # Dúvida não é prova de correção: se a auditoria nova deixou o funcionário em revisão (uma regra falhou) ou
+    # com leitura a conferir no papel (data impossível, CA que não combina), nenhuma pendência dele fecha agora.
+    em_duvida = {a.funcionario_id: a.regra for a in estado.listar_achados(auditoria_id) if a.regra in _REGRAS_DE_DUVIDA}
+
     resultado = []
     for f in sorted(funcionarios):
         for p in estado.listar_pendencias(funcionario_id=f):
@@ -341,6 +346,9 @@ def conciliar(auditoria_id: str, linhas: list[Linha]) -> list[dict[str, str]]:
                 continue  # o problema continua: a pendência fica como está
             if (f, _ferramenta_da_regra(achado.linha)) not in rodou and (f, _AUDITA_TUDO) not in rodou:
                 motivo, fechar = "a auditoria nova não conferiu esta regra; pendência mantida", False
+            elif f in em_duvida:
+                motivo, fechar = (f"a auditoria nova deixou dúvida sobre este funcionário ({em_duvida[f]}); "
+                                  "pendência mantida até conferir"), False
             elif chave[1] == "entrega" and (f, *chave[2:]) not in entregas:
                 motivo, fechar = "a entrega original não está mais na ficha; apagar linha antiga não corrige", False
             else:
