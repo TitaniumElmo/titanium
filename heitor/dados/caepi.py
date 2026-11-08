@@ -179,6 +179,60 @@ def consulta_ca(numero, data):
     }
 
 
+MAX_SUGESTOES = 5
+DISTANCIA_MAXIMA = 2
+
+
+def distancia_edicao(a, b, limite):
+    """Levenshtein; devolve limite + 1 quando passa do limite."""
+    if abs(len(a) - len(b)) > limite:
+        return limite + 1
+    anterior = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        atual = [i]
+        for j, cb in enumerate(b, 1):
+            atual.append(min(anterior[j] + 1, atual[j - 1] + 1, anterior[j - 1] + (ca != cb)))
+        if min(atual) > limite:
+            return limite + 1
+        anterior = atual
+    return anterior[-1]
+
+
+def buscar_ca_proximo(numero):
+    """Sugere CAs parecidos com um número digitado errado. So sugestao: confianca sempre baixa."""
+    chave = str(numero).strip().lstrip("0") if numero is not None else ""
+    if not chave or not chave.isdigit():
+        return []
+    grupos = base_padrao()["grupos"]
+    if chave in grupos:
+        return []
+
+    achados = {1: [], 2: []}
+    for candidato in grupos:
+        if abs(len(candidato) - len(chave)) > DISTANCIA_MAXIMA:
+            continue
+        d = distancia_edicao(chave, candidato, DISTANCIA_MAXIMA)
+        if d <= DISTANCIA_MAXIMA:
+            achados[d].append(candidato)
+    candidatos = achados[1] or achados[2]
+    distancia = 1 if achados[1] else 2
+
+    sugestoes = []
+    for n in candidatos:
+        r = resolver_ca(grupos[n])
+        sugestoes.append({
+            "numero": n,
+            "equipamento": r["equipamento"],
+            "validade": r["validade"].isoformat(),
+            "situacao": r["registro"]["SITUACAO"].strip(),
+            "distancia": distancia,
+            "confianca": "baixa",
+        })
+    sugestoes.sort(key=lambda x: x["validade"], reverse=True)
+    sugestoes.sort(key=lambda x: x["distancia"])
+    return sugestoes[:MAX_SUGESTOES]
+
+
 if __name__ == "__main__":
     base = carregar_base()
     print("data da base:", base["data_base"])
