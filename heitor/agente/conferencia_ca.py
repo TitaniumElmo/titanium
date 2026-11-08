@@ -10,12 +10,14 @@ confiança e com sugestões, e a auditoria pede confirmação ao RH.
 
 from __future__ import annotations
 
+import logging
 import os
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+_log = logging.getLogger("heitor.conferencia_ca")
 CAMINHO_CAEPI = Path(os.getenv("HEITOR_CAEPI", Path(__file__).resolve().parents[2] / "data" / "tgg_export_caepi.txt"))
 CONF_NAO_CONFERE = 0.4
 
@@ -54,21 +56,27 @@ def _indice() -> dict[str, str]:
     Usa a base oficial do time, a mesma das regras (heitor.dados.caepi: dados/RelatorioCA_*.csv). O export
     antigo (tgg_export_caepi.txt, separado por "|") só é lido se HEITOR_CAEPI apontar para ele: antes ele
     era o padrão e, em qualquer máquina sem esse arquivo (inclusive o deploy), a conferência se desligava
-    em silêncio.
+    em silêncio. Sem base, a checagem CA × EPI fica desligada E avisa no log.
     """
     if os.getenv("HEITOR_CAEPI"):
-        return _indice_export_antigo()
-    try:
-        from heitor.dados.caepi import base_padrao
+        indice = _indice_export_antigo()
+    else:
+        try:
+            from heitor.dados.caepi import base_padrao
 
-        grupos = base_padrao()["grupos"]
-    except (FileNotFoundError, ImportError):
-        return {}
-    return {ca.strip().lstrip("0"): linhas[0]["EQUIPAMENTO"].strip() for ca, linhas in grupos.items() if ca.strip()}
+            grupos = base_padrao()["grupos"]
+            indice = {str(ca).strip().lstrip("0"): str(regs[0].get("EQUIPAMENTO", "")).strip()
+                      for ca, regs in grupos.items() if str(ca).strip() and regs}
+        except Exception as e:  # noqa: BLE001 — módulo ou base ausente
+            _log.info("base CAEPI indisponível (%s)", type(e).__name__)
+            indice = {}
+    if not indice:
+        _log.warning("sem base CAEPI (dados/RelatorioCA_*.csv): a checagem CA × EPI está DESLIGADA")
+    return indice
 
 
 def _indice_export_antigo() -> dict[str, str]:
-    """Export antigo da base (coluna 8 = equipamento)."""
+    """Export antigo da base (coluna 8 = equipamento), só com HEITOR_CAEPI."""
     indice: dict[str, str] = {}
     if not CAMINHO_CAEPI.exists():
         return indice
