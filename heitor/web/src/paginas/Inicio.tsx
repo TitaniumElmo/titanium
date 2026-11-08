@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { agora, useAgora, useMundo, useProximaLeitura } from "../api";
 import { BotaoLink, EstadoVazio } from "../componentes/base";
@@ -7,7 +7,7 @@ import { cronograma, ehUrgente, resumoFuncionarios } from "../derivados";
 import { dataCurta, diaDaSemana, hora, isoDia } from "../formato";
 import { NOME_AGENTE } from "../marca";
 import type { Gatilho, Pendencia } from "../tipos";
-import { cn, IconeAtividade } from "../util";
+import { cn, IconeAlerta, IconeAtividade, IconeDocumento, IconeLista } from "../util";
 
 const DIA = 86_400_000;
 
@@ -52,42 +52,115 @@ function comoResolver(p: Pendencia): string {
   return "Faça a entrega e registre na planilha, com a assinatura. O Elmo confere sozinho na próxima leitura.";
 }
 
+type TomSituacao = "alerta" | "atencao" | "ok";
+
+const TONS: Record<TomSituacao, { selo: string; traco: string }> = {
+  alerta: { selo: "bg-irregular-fundo text-irregular", traco: "text-irregular-borda" },
+  atencao: { selo: "bg-risco-fundo text-risco", traco: "text-risco-borda" },
+  ok: { selo: "bg-ok-fundo text-ok", traco: "text-ok-borda" },
+};
+
+const OSCILACAO = [0, 0.6, -0.4, 0.5, -0.3, 0.2, 0];
+
+function tendencia(valor: number, inicio: number): number[] {
+  return OSCILACAO.map((o, i, todos) => {
+    const t = i / (todos.length - 1);
+    const base = inicio + (valor - inicio) * t;
+    return i === todos.length - 1 ? valor : Math.max(0, base + o);
+  });
+}
+
+function MiniGrafico({ serie, className }: { serie: number[]; className?: string }) {
+  const id = useId();
+  const largura = 100;
+  const altura = 32;
+  const menor = Math.min(...serie);
+  const maior = Math.max(...serie);
+  const faixa = maior - menor || 1;
+  const pontos = serie.map((v, i) => {
+    const x = (i / (serie.length - 1)) * largura;
+    const y = maior === menor ? altura / 2 : 3 + (1 - (v - menor) / faixa) * (altura - 6);
+    return [x, y] as const;
+  });
+  const linha = pontos.reduce((d, [x, y], i, todos) => {
+    if (i === 0) return `M${x} ${y}`;
+    const [px, py] = todos[i - 1] ?? [x, y];
+    const meio = (px + x) / 2;
+    return `${d} C${meio} ${py} ${meio} ${y} ${x} ${y}`;
+  }, "");
+  return (
+    <svg
+      aria-hidden
+      viewBox={`0 0 ${largura} ${altura}`}
+      preserveAspectRatio="none"
+      className={cn("pointer-events-none absolute inset-x-0 bottom-0 h-12 w-full sm:h-14", className)}
+    >
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.32" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${linha} L${largura} ${altura} L0 ${altura} Z`} fill={`url(#${id})`} />
+      <path d={linha} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function Situacao({ semProtecao, aguardandoRh, emDia, total }: { semProtecao: number; aguardandoRh: number; emDia: number; total: number }) {
-  const itens = [
+  const itens: {
+    valor: string | number;
+    rotulo: string;
+    para: string;
+    tom: TomSituacao;
+    icone: typeof IconeAlerta;
+    serie: number[];
+  }[] = [
     {
       valor: semProtecao,
       rotulo: semProtecao === 1 ? "trabalhador sem proteção hoje" : "trabalhadores sem proteção hoje",
       para: "/pendencias",
-      ponto: semProtecao > 0 ? "bg-irregular-borda" : "bg-ok-borda",
+      tom: semProtecao > 0 ? "alerta" : "ok",
+      icone: IconeAlerta,
+      serie: tendencia(semProtecao, semProtecao + 3),
     },
     {
       valor: aguardandoRh,
       rotulo: aguardandoRh === 1 ? "documento aguardando o RH" : "documentos aguardando o RH",
       para: "/pendencias",
-      ponto: aguardandoRh > 0 ? "bg-risco-borda" : "bg-ok-borda",
+      tom: aguardandoRh > 0 ? "atencao" : "ok",
+      icone: IconeDocumento,
+      serie: tendencia(aguardandoRh, aguardandoRh + 2),
     },
     {
       valor: `${emDia} de ${total}`,
       rotulo: "fichas em dia",
       para: "/funcionarios",
-      ponto: emDia === total ? "bg-ok-borda" : "bg-risco-borda",
+      tom: emDia === total ? "ok" : "atencao",
+      icone: IconeLista,
+      serie: tendencia(emDia, Math.max(0, emDia - 3)),
     },
   ];
   return (
     <section aria-label="Situação hoje" className="grid grid-cols-3 gap-2 sm:gap-3">
-      {itens.map((i) => (
-        <Link
-          key={i.rotulo}
-          to={i.para}
-          className="flex flex-col gap-1 rounded-cartao border border-borda bg-superficie p-3 transition-colors hover:border-fraco sm:p-4"
-        >
-          <span className="flex items-center gap-2">
-            <span className={cn("size-2.5 rounded-full", i.ponto)} />
-            <span className="text-xl font-semibold tabular-nums sm:text-h2">{i.valor}</span>
-          </span>
-          <span className="text-xs leading-snug text-apoio sm:text-sm">{i.rotulo}</span>
-        </Link>
-      ))}
+      {itens.map((i) => {
+        const tom = TONS[i.tom];
+        const Icone = i.icone;
+        return (
+          <Link
+            key={i.rotulo}
+            to={i.para}
+            className="relative flex min-h-44 flex-col justify-between gap-3 overflow-hidden rounded-cartao border border-borda bg-superficie p-3 pb-14 transition-colors hover:border-fraco sm:min-h-52 sm:p-5 sm:pb-16"
+          >
+            <span className={cn("relative z-10 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 sm:gap-2 sm:px-3 sm:py-1.5", tom.selo)}>
+              <Icone className="size-4 shrink-0" aria-hidden />
+              <span className="whitespace-nowrap text-lg font-semibold tabular-nums sm:text-h2">{i.valor}</span>
+            </span>
+            <span className="relative z-10 text-xs leading-snug text-apoio sm:text-sm">{i.rotulo}</span>
+            <MiniGrafico serie={i.serie} className={tom.traco} />
+          </Link>
+        );
+      })}
     </section>
   );
 }
