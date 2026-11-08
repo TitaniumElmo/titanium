@@ -1,13 +1,16 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAgora, useMundo, useProximaLeitura } from "../api";
 import { BotaoLink, EstadoVazio } from "../componentes/base";
 import { Pagina } from "../componentes/Pagina";
+import { BarraFiltros, CartaoNumero, GraficoAtividade } from "../componentes/ResumoHistorico";
 import { SeloGatilho } from "../componentes/Selos";
-import { hora, mesmoDia, rotuloDia, ROTULO_STATUS } from "../formato";
+import { useEstado } from "../estado";
+import { ROTULO_GATILHO, hora, mesmoDia, rotuloDia, ROTULO_STATUS } from "../formato";
+import { colunasDoGrafico, exportarCsv, filtrar, funcionariosDoItem, noPeriodo, resumir, rotuloDuracao, SEM_FILTROS, type Filtros } from "../historico";
 import { NOME_AGENTE } from "../marca";
-import type { ItemAtividade } from "../tipos";
-import { cn, IconeAtividade } from "../util";
+import type { Gatilho, ItemAtividade } from "../tipos";
+import { cn, IconeAlerta, IconeAtividade, IconeCalendario, IconeLista } from "../util";
 
 function FaixaStatus() {
   const mundo = useMundo();
@@ -91,7 +94,12 @@ function ItemFeed({ item, novo }: { item: ItemAtividade; novo: boolean }) {
                 key={`a-${id}`}
                 to={`/pendencias?p=${id}`}
                 onClick={(e) => e.stopPropagation()}
-                className="rounded-selo border border-borda bg-superficie-2 px-2 py-0.5 font-mono text-xs text-apoio hover:text-texto"
+                className={cn(
+                  "rounded-selo border px-2 py-0.5 font-mono text-xs",
+                  ["reaberta", "escalada"].includes(rotuloChip(id))
+                    ? "border-irregular-borda/40 bg-irregular-fundo font-semibold text-irregular"
+                    : "border-borda bg-superficie-2 text-apoio hover:text-texto",
+                )}
               >
                 {id} {rotuloChip(id)}
               </Link>
@@ -116,6 +124,8 @@ function ItemFeed({ item, novo }: { item: ItemAtividade; novo: boolean }) {
 export function Historico() {
   const mundo = useMundo();
   const instante = useAgora(60_000);
+  const { periodo } = useEstado();
+  const [filtros, setFiltros] = useState<Filtros>(SEM_FILTROS);
   const vistos = useRef<Set<string> | null>(null);
   if (vistos.current === null) vistos.current = new Set(mundo.atividade.map((i) => i.id));
 
@@ -136,16 +146,64 @@ export function Historico() {
     );
   }
 
+  const doPeriodo = noPeriodo(mundo.atividade, periodo, instante);
+  const visiveis = filtrar(doPeriodo, filtros, mundo.pendencias);
+  const resumo = resumir(doPeriodo, mundo.pendencias, periodo, instante);
+  const colunas = colunasDoGrafico(visiveis, periodo, instante);
+  const funcionariosDoPeriodo = [...new Set(doPeriodo.flatMap((i) => [...funcionariosDoItem(i, mundo.pendencias)]))].map((id) => ({
+    valor: id,
+    texto: mundo.funcionarios.find((f) => f.funcionario_id === id)?.nome ?? id,
+  }));
+  const gatilhos = [...new Set(doPeriodo.map((i) => i.disparado_por))] as Gatilho[];
+  const filtrando = Boolean(filtros.funcionario || filtros.gatilho || filtros.evento);
+  const exportar = () => {
+    const blob = new Blob([exportarCsv(visiveis, (g) => ROTULO_GATILHO[g])], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "historico-elmo.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const grupos: { dia: string; itens: ItemAtividade[] }[] = [];
-  for (const item of mundo.atividade) {
+  for (const item of visiveis) {
     const ultimo = grupos[grupos.length - 1];
     if (ultimo && mesmoDia(ultimo.dia, item.ts)) ultimo.itens.push(item);
     else grupos.push({ dia: item.ts, itens: [item] });
   }
 
   return (
-    <Pagina titulo="Histórico" descricao={`Tudo o que o ${NOME_AGENTE} fez e o que o levou a agir. Ninguém precisa pedir: ele age quando algo muda.`}>
+    <Pagina
+      titulo="Histórico"
+      comPeriodo
+      descricao={`Tudo o que o ${NOME_AGENTE} fez e o que o levou a agir. Ninguém precisa pedir: ele age quando algo muda.`}
+    >
       <FaixaStatus />
+      <section aria-label="Resumo do período" className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+        <CartaoNumero rotulo="Ações do Elmo" valor={resumo.acoes} detalhe="no período escolhido" icone={<IconeAtividade className="size-full" />} />
+        <CartaoNumero
+          rotulo="Pendências"
+          valor={resumo.fechadas}
+          detalhe={`fechadas · ${resumo.abertas} ${resumo.abertas === 1 ? "aberta" : "abertas"} agora`}
+          icone={<IconeLista className="size-full" />}
+        />
+        <CartaoNumero
+          rotulo="Reabertas"
+          valor={resumo.reabertas}
+          detalhe="correção não confirmada"
+          urgente={resumo.reabertas > 0}
+          icone={<IconeAlerta className="size-full" />}
+        />
+        <CartaoNumero rotulo="Tempo para fechar" valor={rotuloDuracao(resumo.tempoMedioMs)} detalhe="média das pendências fechadas" icone={<IconeCalendario className="size-full" />} />
+      </section>
+      <GraficoAtividade colunas={colunas} />
+      <BarraFiltros filtros={filtros} onChange={setFiltros} funcionarios={funcionariosDoPeriodo} gatilhos={gatilhos} ativos={filtrando} onExportar={exportar} />
+      {grupos.length === 0 && (
+        <p className="rounded-cartao border border-dashed border-borda px-4 py-8 text-center text-sm text-apoio">
+          Nada no período com esses filtros.
+        </p>
+      )}
       {grupos.map((g) => (
         <section key={g.dia} className="flex flex-col gap-2">
           <h2 className="text-label text-apoio">{rotuloDia(g.dia, instante)}</h2>
