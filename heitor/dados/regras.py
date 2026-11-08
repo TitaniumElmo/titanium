@@ -12,7 +12,7 @@ _ids = itertools.count(1)
 
 LIMITE_ASSINATURA = 0.7
 REGRAS_FORA_DO_CONTRATO = {"funcao_desconhecida", "entrega_sem_ficha", "ficha_sem_planilha"}
-CAMPOS_EXTRAS = ("na_ficha", "assinatura_tipo", "assinatura_texto", "leitura_assinatura")
+CAMPOS_EXTRAS = ("na_ficha", "assinatura_tipo", "assinatura_texto", "leitura_assinatura", "conferencia_ca")
 TIPOS_ASSINATURA_DUVIDOSA = {
     "texto": "na coluna de assinatura há texto{t}, não uma assinatura",
     "marca": "na coluna de assinatura há só uma marca{t}",
@@ -127,6 +127,13 @@ def audita_linha(linha: Linha, funcao: str, extras: dict | None = None) -> list[
     f, n = linha.funcionario_id, linha.linha
     achados = _achados_de_assinatura(linha, extras or {})
     ca = _normaliza_ca(linha.ca)
+    conferencia = (extras or {}).get("conferencia_ca")
+    if ca and conferencia and conferencia.get("confere") is False:
+        # leitura duvidosa do CA nunca vira CA vencido
+        motivo = conferencia.get("motivo") or "CA não confere com a ficha"
+        achados.append(_achado(f, n, "ca_nao_encontrado", "risco", "prova",
+                               f"linha {n}, {motivo}", "conferir o CA na ficha física"))
+        return achados
     if not ca:
         achados.append(_achado(f, n, "ca_ausente", "risco", "prova",
                                f"linha {n}, campo CA vazio", "pedir nota fiscal ao RH"))

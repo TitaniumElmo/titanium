@@ -249,3 +249,38 @@ def test_fora_da_planilha_com_dois_itens():
 def test_fora_da_planilha_vazia_e_dict_unico():
     assert audita_fora_da_planilha([], "0302") == []
     assert len(audita_fora_da_planilha({"data": "2026-10-15", "epi": "luva"}, "0302")) == 1
+
+
+@precisa_base
+def test_conferencia_ca_false_gera_so_nao_encontrado_nunca_vencido():
+    conf = {"confere": False, "motivo": "CA 28499 é de calçado, ficha diz 'luva'"}
+    a = audita_linha(_dict_linha(ca="28499", conferencia_ca=conf), "armador")
+    assert [x["regra"] for x in a] == ["ca_nao_encontrado"]
+    assert (a[0]["gravidade"], a[0]["tipo"]) == ("risco", "prova")
+    assert a[0]["evidencia"] == "linha 3, CA 28499 é de calçado, ficha diz 'luva'"
+    assert a[0]["acao_sugerida"] == "conferir o CA na ficha física"
+    # sem a conferencia, o mesmo CA e vencido
+    assert [x["regra"] for x in audita_linha(_dict_linha(ca="28499"), "armador")] == ["ca_vencido"]
+
+
+@precisa_base
+def test_conferencia_ca_true_ou_ausente_nao_muda_nada():
+    base = audita_linha(_dict_linha(ca="28499"), "armador")
+    com_true = audita_linha(_dict_linha(ca="28499", conferencia_ca={"confere": True}), "armador")
+    assert [x["regra"] for x in com_true] == [x["regra"] for x in base] == ["ca_vencido"]
+    assert audita_linha(_dict_linha(conferencia_ca=None), "armador") == []
+    assert audita_linha(_dict_linha(conferencia_ca={"confere": True}), "armador") == []
+
+
+@precisa_base
+def test_conferencia_ca_false_avalia_a_assinatura_junto():
+    conf = {"confere": False, "motivo": "CA não confere"}
+    a = audita_linha(_dict_linha(ca="28499", assinatura=False, assinatura_tipo="outro_nome",
+                                 assinatura_texto="Pedro", conferencia_ca=conf), "armador")
+    assert sorted(x["regra"] for x in a) == ["assinatura_ausente", "ca_nao_encontrado"]
+
+
+@precisa_base
+def test_conferencia_ca_false_sem_ca_segue_ca_ausente():
+    a = audita_linha(_dict_linha(ca=None, conferencia_ca={"confere": False, "motivo": "x"}), "armador")
+    assert [x["regra"] for x in a] == ["ca_ausente"]
