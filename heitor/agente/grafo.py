@@ -533,6 +533,16 @@ def reauditar(pendencia_id: str, linhas: list[Any], emitir_evento: EmitirEvento 
     exe = Execucao(f"re-{pendencia_id}", linhas, emitir_evento)
     exe.modo = "deterministico"
     fid = str(achado.get("funcionario_id"))
+    if not exe.por_funcionario.get(fid):
+        # Nenhuma linha DESTE funcionário: documento (nota fiscal, lista de presença: o modelo de visão lê os itens
+        # da nota como "linhas" sem dono), arquivo de outro funcionário ou leitura que falhou. As regras não têm o
+        # que conferir; reabrir diria "não corrigiu" sem saber. Fica para uma pessoa olhar (a API já marcou a
+        # pendência como "aguardando" ao receber a resposta).
+        motivo = (f"o arquivo não tem entregas do funcionário {fid} (documento ou ficha de outra pessoa?); "
+                  "fica aguardando conferência humana")
+        exe.evento("fechar_pendencia", {"pendencia_id": pendencia_id, "resultado": "sem_decisao"}, {}, pensamento=motivo)
+        status = pendencia.get("status") if isinstance(pendencia, dict) else getattr(pendencia, "status", None)
+        return {"pendencia_id": pendencia_id, "status": status or "aguardando", "motivo": motivo, "achados_novos": []}
     ctx = exe.novo_contexto(fid) if exe.por_funcionario.get(fid) else None
 
     novos: list[Achado] = []
