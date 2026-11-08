@@ -559,8 +559,17 @@ def reauditar(pendencia_id: str, linhas: list[Any], emitir_evento: EmitirEvento 
         exe.evento("audita_linha", {"linhas": sorted(ctx.linhas)}, r.saida, pensamento="reauditar a correção")
         novos = [a for a in ctx.achados_do_funcionario() if a.get("gravidade") != "ok"]
 
+    # A correção = entregas registradas a partir do dia em que a pendência abriu. Ela tem de vir LIMPA: entregar
+    # uma bota com CA vencido não corrige um CA suspenso (antes, só se olhava se a regra antiga tinha sumido).
+    aberta_em = _abertura(pendencia)
+    correcao = {n for n, l in (ctx.linhas.items() if ctx else []) if aberta_em and str(l.get("data") or "") >= aberta_em}
+    problema_na_correcao = [a for a in novos if a.get("linha") in correcao and a.get("gravidade") in ("irregular", "risco")]
+
     if not ctx:
         confere, motivo = False, "nenhuma linha nova deste funcionário"
+    elif problema_na_correcao:
+        confere = False
+        motivo = f"a entrega registrada como correção tem outro problema: {problema_na_correcao[0]['evidencia']}"
     elif achado.get("regra") in _REGRAS_DA_FICHA:
         cat = _categoria_do_achado(achado, ctx.funcao)
         boas = [l for l in ctx.linhas.values()
@@ -574,9 +583,19 @@ def reauditar(pendencia_id: str, linhas: list[Any], emitir_evento: EmitirEvento 
         motivo = "a falha não aparece mais" if confere else f"a falha continua: {mesma[0]['evidencia']}"
 
     resultado = "confirmada" if confere else "nao_confirmada"
-    p = F.IMPL["fechar_pendencia"](pendencia, resultado)
+    p = F.IMPL["fechar_pendencia"](pendencia, resultado, motivo)  # o motivo vai para o histórico (a tela mostra)
     exe.evento("fechar_pendencia", {"pendencia_id": pendencia_id, "resultado": resultado}, p, pensamento=motivo)
     return {"pendencia_id": pendencia_id, "status": p["status"], "motivo": motivo, "achados_novos": novos}
+
+
+def _abertura(pendencia: Any) -> str | None:
+    """Dia (AAAA-MM-DD) em que a pendência abriu: o primeiro registro do histórico."""
+    hist = pendencia.get("historico") if isinstance(pendencia, dict) else getattr(pendencia, "historico", None)
+    if not hist:
+        return None
+    primeiro = hist[0]
+    ts = primeiro.get("ts") if isinstance(primeiro, dict) else getattr(primeiro, "ts", None)
+    return str(ts)[:10] if ts else None
 
 
 def _categoria_do_achado(achado: Achado, funcao: str) -> str | None:

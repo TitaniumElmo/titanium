@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useAgora, useMundo } from "../api";
+import { SUPORTA, useAgora, useMundo } from "../api";
 import { EstadoVazio, Segmentos } from "../componentes/base";
 import { CartaoAchado } from "../componentes/CartaoAchado";
 import { CartaoAba } from "../componentes/ResumoHistorico";
 import { CicloPendencia } from "../componentes/CicloPendencia";
+import { RegistrarCorrecao } from "../componentes/RegistrarCorrecao";
 import { Pagina } from "../componentes/Pagina";
 import { SeloDestino, SeloEscalado, SeloGatilho, SeloStatus, SeloUrgente } from "../componentes/Selos";
 import { ehUrgente } from "../derivados";
@@ -175,6 +176,8 @@ function Detalhe({ p, hoje, aoFechar }: { p: Pendencia; hoje: string; aoFechar: 
             {p.motivo}
           </p>
 
+          {SUPORTA.responderPendencia && <RegistrarCorrecao key={p.id} p={p} hoje={hoje} />}
+
           <section className="rounded-cartao border border-borda bg-superficie p-4">
             <h3 className="mb-3 text-label text-apoio">Ciclo</h3>
             <CicloPendencia modo="completo" pendencia={p} />
@@ -212,7 +215,7 @@ function Detalhe({ p, hoje, aoFechar }: { p: Pendencia; hoje: string; aoFechar: 
             </ol>
           </section>
           <p className="text-xs text-fraco">
-            A correção chega pela própria planilha. O {NOME_AGENTE} confere na leitura seguinte e fecha ou reabre a pendência. Prazo
+            A correção chega pela própria planilha ou é registrada aqui. O {NOME_AGENTE} confere com as mesmas regras e fecha ou reabre a pendência. Prazo
             final: {data(p.prazo)}.
           </p>
         </div>
