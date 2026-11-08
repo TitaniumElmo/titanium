@@ -25,6 +25,7 @@ from heitor.agente.assinatura import classificar_linhas
 from heitor.agente.ferramentas import normalizar_data
 from heitor.agente.foto import (CONF_CONCORDA, CONF_DISCORDA, CONF_SO_UMA, MODELO_VISAO, MODELO_VISAO_RESERVA,
                                 PROMPT_ASSINATURAS, _imagem_b64, _perguntar, _texto_assinado)
+from heitor.agente.foto import ler_treinamento  # noqa: F401  (a ferramenta chama CAS.ler_treinamento; os testes trocam)
 from heitor.agente.llm import ClienteLLM
 
 PROMPT_GUIADO = """Esta é a foto da ficha de entrega de EPI de {nome}.

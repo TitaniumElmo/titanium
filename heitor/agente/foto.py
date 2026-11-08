@@ -217,6 +217,52 @@ def ler_foto(arquivo: str | Path) -> dict[str, Any]:
             "custo_usd": round(custo, 6), "modelo": MODELO_VISAO}
 
 
+# Pergunta separada (não mexe nas perguntas das assinaturas, que foram medidas): só o cabeçalho.
+PROMPT_TREINAMENTO = """Olhe só o CABEÇALHO desta ficha de entrega de EPI (acima da tabela de entregas).
+Procure um campo cujo RÓTULO fale de treinamento (ex.: "Treinamento sobre uso do EPI (data)", "Treinamento:").
+Em fichas impressas ele costuma ficar ao lado de "Data de admissão".
+
+Olhe o que está escrito À MÃO dentro desse campo, e só dentro dele.
+NUNCA use datas da tabela de entregas nem a data de admissão: se o campo de treinamento não tem nada
+escrito à mão, ele está vazio, mesmo que a admissão ou a tabela tenham datas.
+
+Responda SOMENTE com JSON:
+{"tem_rotulo": true/false, "tem_escrita_a_mao": true/false, "data": "DD/MM/AAAA" ou null}
+tem_rotulo: o cabeçalho tem um rótulo de treinamento?
+tem_escrita_a_mao: há tinta de caneta DENTRO do espaço desse campo (não no rótulo impresso)?
+data: só se tem_escrita_a_mao for true."""
+
+
+def interpretar_treinamento(obj: dict[str, Any]) -> dict[str, Any]:
+    """Resposta do modelo -> {"estado", "data"}: ok | vazio | sem_campo | ilegivel.
+
+    Só "vazio" é lacuna: formulário sem o campo não prova que faltou treinamento.
+    """
+    if "tem_rotulo" in obj:  # formato sim/não
+        if not _bool(obj.get("tem_rotulo")):
+            return {"estado": "sem_campo", "data": None}
+        if not _bool(obj.get("tem_escrita_a_mao")):
+            return {"estado": "vazio", "data": None}
+        obj = {"campo": "preenchido", "data": obj.get("data")}
+    campo = re.sub(r"[\s_-]", "", str(obj.get("campo", "")).lower())
+    if campo in ("semcampo", "naotem", "nãotem", "nao", "não"):
+        return {"estado": "sem_campo", "data": None}
+    if campo == "vazio":
+        return {"estado": "vazio", "data": None}
+    texto, estado = _campo(obj.get("data"))
+    data = normalizar_data(texto) if texto else None
+    if data:
+        return {"estado": "ok", "data": data}
+    return {"estado": "vazio" if estado == "vazio" else "ilegivel", "data": None}
+
+
+def ler_treinamento(arquivo: str | Path) -> dict[str, Any]:
+    """Lê o campo de treinamento do cabeçalho -> {"estado", "data", "custo_usd"} (~5-10 s)."""
+    cliente = ClienteLLM(modelo=MODELO_VISAO, reserva=MODELO_VISAO_RESERVA, timeout_s=90, extra=False)
+    obj, custo = _perguntar(cliente, _imagem_b64(Path(arquivo)), PROMPT_TREINAMENTO, 120)
+    return {**interpretar_treinamento(obj or {}), "custo_usd": round(custo, 6)}
+
+
 def reextrair_assinatura(arquivo: str | Path, linha: LinhaDict) -> dict[str, Any] | None:
     """Nova tentativa na assinatura: pergunta B de novo, com a foto em resolução maior."""
     cliente = ClienteLLM(modelo=MODELO_VISAO, reserva=MODELO_VISAO_RESERVA, timeout_s=90, extra=False)
