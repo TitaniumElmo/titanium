@@ -83,10 +83,10 @@
   --cartao-urgente-meio: #54383a;
   --cartao-urgente-base: #16161c;
   --cartao-brilho: rgba(255, 255, 255, 0.06);
-  --atalho-topo: #1d1e24;
-  --atalho-base: #131316;
-  --atalho-brilho: rgba(255, 106, 40, 0.2);
-  --selo-claro: #ffffff;
+  --atalho-topo: #782b0d;
+  --atalho-base: #3a3a4c;
+  --atalho-brilho: rgba(225, 164, 138, 0.2);
+  --selo-claro: #ffffffdf;
   --selo-claro-texto: #111111;
   --selo-claro-hover: #e8e8ea;
   --gradiente-destaque: linear-gradient(135deg, #ffc24a 0%, #ff8a1e 100%);
@@ -97,7 +97,7 @@
   --irregular-texto: #ff8b8f;
   --irregular-fundo: #3a1416;
   --risco-texto: #c89875;
-  --risco-fundo: #6e2b17;
+  --risco-fundo: #82331b;
   --ok-texto: #6fd6a0;
   --ok-fundo: #12301f;
 
