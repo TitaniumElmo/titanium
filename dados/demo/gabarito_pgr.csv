@@ -1,0 +1,4 @@
+funcionario_id;linha;achado_esperado;caso
+0501;;epi_inadequado;1 pedreiro sem capacete (kit incompleto, acidente)
+0507;;troca_atrasada;2 armador com botina vencida: última entrega há mais de 365 dias (acidente)
+0504;16;assinatura_ausente;3 protetor auditivo entregue sem assinatura (passivo, ruído)

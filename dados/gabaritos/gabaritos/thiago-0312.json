@@ -1,0 +1,65 @@
+{
+ "ficha_id": "thiago-0312",
+ "fonte": "transcrito pelo Claude a partir da foto, NÃO CONFERIDO",
+ "cabecalho": {
+  "nome": "Thiago Moura Leal",
+  "matricula": "0312",
+  "funcao": "armador",
+  "data_admissao": "2025-06-02",
+  "treinamento": "2025-06-02"
+ },
+ "entregas": [
+  {
+   "linha": 1,
+   "data": "2025-06-02",
+   "epi": "capacete classe A",
+   "qtd": 1,
+   "ca": "29637",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 2,
+   "data": "2025-06-02",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "9182",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 3,
+   "data": "2025-06-02",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "21245",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 4,
+   "data": "2025-06-02",
+   "epi": "óculos de proteção",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 5,
+   "data": "2025-06-02",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "1",
+   "assinatura": "presente"
+  }
+ ],
+ "fotos": [
+  {
+   "arquivo": "thiago-0312.jpg",
+   "condicao": "formulário impresso, reto",
+   "linhas_visiveis": "cabecalho + 1-5"
+  }
+ ]
+}

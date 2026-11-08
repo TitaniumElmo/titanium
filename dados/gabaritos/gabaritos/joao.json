@@ -1,0 +1,23 @@
+{
+  "ficha_id": "joao",
+  "cabecalho": {
+    "empresa": "Construtora Horizonte Ltda",
+    "nome": "João",
+    "funcao": null,
+    "data_admissao": null,
+    "treinamento": null
+  },
+  "entregas": [
+    {"linha": 1, "data": "2023-01-10", "epi": "capacete classe A", "qtd": 1, "ca": null, "motivo": "1", "assinatura": "João", "rasura": null},
+    {"linha": 2, "data": "2023-01-10", "epi": "botina de segurança", "qtd": 1, "ca": null, "motivo": "1", "assinatura": "João", "rasura": null},
+    {"linha": 3, "data": "2023-01-10", "epi": "luva de raspa", "qtd": 1, "ca": null, "motivo": "1", "assinatura": "João", "rasura": null},
+    {"linha": 4, "data": "2023-01-10", "epi": "protetor auricular", "qtd": 1, "ca": null, "motivo": "1", "assinatura": "João", "rasura": null},
+    {"linha": 5, "data": "2023-01-10", "epi": "óculos de proteção", "qtd": 1, "ca": null, "motivo": "1", "assinatura": "João", "rasura": null},
+    {"linha": 6, "data": "2023-06-15", "epi": "luva de raspa", "qtd": 1, "ca": null, "motivo": "T", "assinatura": "João"},
+    {"linha": 7, "data": "2024-02-02", "epi": "botina de segurança", "qtd": 1, "ca": null, "motivo": "T", "assinatura": "João", "rasura": "assinatura"},
+    {"linha": 8, "data": "2024-02-20", "epi": "luva de raspa", "qtd": 2, "ca": null, "motivo": "T", "assinatura": "João", "rasura": null}
+  ],
+  "fotos": [
+    {"arquivo": "joao.jpg", "condicao": "formulário impresso, inclinado e desfocado, cabeçalho cortado à direita", "linhas_visiveis": "cabecalho + 1-8"}
+  ]
+}

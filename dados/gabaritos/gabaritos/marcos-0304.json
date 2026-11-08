@@ -1,0 +1,116 @@
+{
+ "ficha_id": "marcos-0304",
+ "transcrito_por": "Claude, a partir da foto — CONFERIR",
+ "cabecalho": {
+  "empresa": "Construtora Horizonte Ltda",
+  "nome": "Marcos Vinicius",
+  "matricula": "0304",
+  "funcao": "Carpinteiro",
+  "data_admissao": "2022-08-01",
+  "treinamento": "2022-08-01"
+ },
+ "entregas": [
+  {
+   "linha": 1,
+   "data": "2022-08-01",
+   "epi": "capacete classe A",
+   "qtd": 1,
+   "ca": "29637",
+   "motivo": "1",
+   "assinatura": "Marcos"
+  },
+  {
+   "linha": 2,
+   "data": "2022-08-01",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "9182",
+   "motivo": "1",
+   "assinatura": "Marcos"
+  },
+  {
+   "linha": 3,
+   "data": "2022-08-01",
+   "epi": "óculos de proteção",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "1",
+   "assinatura": "Marcos",
+   "rasura": "mês reescrito"
+  },
+  {
+   "linha": 4,
+   "data": "2022-08-01",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "21245",
+   "motivo": "1",
+   "assinatura": "Marcos"
+  },
+  {
+   "linha": 5,
+   "data": "2022-08-20",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "Marcos"
+  },
+  {
+   "linha": 6,
+   "data": "2022-09-05",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "Marcos",
+   "observacao": "ano pode ser lido como 27"
+  },
+  {
+   "linha": 7,
+   "data": "2022-09-25",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "Marcos"
+  },
+  {
+   "linha": 8,
+   "data": "2023-03-14",
+   "epi": "óculos de proteção",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "P",
+   "assinatura": "outro_nome",
+   "observacao": "assinatura com outro nome",
+   "nome_assinado": "Marcelo"
+  },
+  {
+   "linha": 9,
+   "data": "2024-02-02",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "12844",
+   "motivo": "T",
+   "assinatura": "Marcos"
+  },
+  {
+   "linha": 10,
+   "data": "2023-12-15",
+   "epi": "protetor auricular",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "1",
+   "assinatura": "Marcos",
+   "observacao": "fora da ordem cronológica"
+  }
+ ],
+ "fotos": [
+  {
+   "arquivo": "marcos-0304.jpg",
+   "condicao": "formulário impresso, levemente inclinado",
+   "linhas_visiveis": "cabecalho + 1-10"
+  }
+ ]
+}

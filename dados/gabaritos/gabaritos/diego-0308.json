@@ -1,0 +1,89 @@
+{
+ "ficha_id": "diego-0308",
+ "fonte": "gabarito da Sofia (fichas 7 a 10)",
+ "cabecalho": {
+  "nome": "Diego Ramos Farias",
+  "matricula": "0308",
+  "funcao": "carpinteiro"
+ },
+ "entregas": [
+  {
+   "linha": 1,
+   "data": "2023-01-12",
+   "epi": "capacete classe A",
+   "qtd": 1,
+   "ca": "29637",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 2,
+   "data": "2023-01-12",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "9182",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 3,
+   "data": "2023-01-12",
+   "epi": "óculos de proteção",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 4,
+   "data": "2023-01-12",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 5,
+   "data": "2023-06-20",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "T",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 6,
+   "data": "2024-09-15",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "T",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 7,
+   "data": "2025-03-10",
+   "epi": "luva de raspa",
+   "qtd": 2,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 8,
+   "data": "2026-05-20",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "T",
+   "assinatura": "presente"
+  }
+ ],
+ "fotos": [
+  {
+   "arquivo": "diego-0308.jpg",
+   "linhas_visiveis": "cabecalho + 1-8"
+  }
+ ]
+}

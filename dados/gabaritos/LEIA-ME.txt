@@ -1,0 +1,20 @@
+Gabaritos das fotos de fichas de EPI (Heitor) — 13 fichas, 15 fotos.
+
+Fichas impressas (formulário NR-6), usadas na avaliação principal:
+  rafael, joao, marcos-0304, jose-antonio-0303, fabio-0310, diego-0308, bruno-0307,
+  sergio-0309, lucas-0306, thiago-0312, wagner-0313
+Fichas de caderno (fora do escopo da demo): jose-carlos-0172 (ficha01.jpeg), antonio-0217 (259370/71/87.jpg)
+
+Campo "assinatura": presente | ausente | iniciais | x | falhada | texto | visto | outro_nome
+  (um nome, como "José Carlos", conta como presente; null conta como ausente)
+"linha_fisica": posição real na folha quando há linha riscada antes (lucas-0306).
+
+AINDA NÃO CONFERIDOS na ficha física (transcritos a partir da foto):
+  marcos-0304, jose-antonio-0303, thiago-0312, wagner-0313
+
+Observação: na base RelatorioCA de 07/11, o CA 21245 aparece válido em maio/2024;
+os gabaritos que esperam "CA vencido" para ele nesse período podem divergir.
+
+Avaliar (fotos em fotos_teste/fotos, gabaritos em fotos_teste/gabaritos_impressos):
+  python -m tests.avaliar_assinaturas fotos_teste/fotos fotos_teste/gabaritos_impressos --cenarios
+  python -m tests.avaliar_fotos fotos_teste/fotos fotos_teste/gabaritos_impressos

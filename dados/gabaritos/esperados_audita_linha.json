@@ -1,0 +1,235 @@
+{
+ "descricao": "Achados esperados nas 11 fichas impressas, por linha. Derivado dos fatos da ficha e da base CAEPI de 07/11/2026, nao da saida do codigo. Linhas ausentes daqui devem nao gerar achado. Nao cobre troca_atrasada.",
+ "fichas": [
+  "rafael",
+  "joao",
+  "marcos-0304",
+  "jose-antonio-0303",
+  "fabio-0310",
+  "diego-0308",
+  "bruno-0307",
+  "sergio-0309",
+  "lucas-0306",
+  "thiago-0312",
+  "wagner-0313"
+ ],
+ "esperados": [
+  {
+   "ficha": "rafael",
+   "linha": 1,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "rafael",
+   "linha": 2,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "rafael",
+   "linha": 3,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "rafael",
+   "linha": 5,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "rafael",
+   "linha": 4,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "rafael",
+   "linha": 4,
+   "regra": "assinatura_ausente",
+   "gravidade": "irregular"
+  },
+  {
+   "ficha": "rafael",
+   "linha": 6,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "rafael",
+   "linha": 6,
+   "regra": "assinatura_ausente",
+   "gravidade": "irregular"
+  },
+  {
+   "ficha": "joao",
+   "linha": 1,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "joao",
+   "linha": 2,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "joao",
+   "linha": 3,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "joao",
+   "linha": 4,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "joao",
+   "linha": 5,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "joao",
+   "linha": 6,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "joao",
+   "linha": 7,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "joao",
+   "linha": 8,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "marcos-0304",
+   "linha": 8,
+   "regra": "assinatura_ausente",
+   "gravidade": "risco",
+   "nota": "assinado por outro nome"
+  },
+  {
+   "ficha": "jose-antonio-0303",
+   "linha": 3,
+   "regra": "ca_nao_encontrado",
+   "gravidade": "risco",
+   "nota": "CA de 6 digitos, leitura duvidosa"
+  },
+  {
+   "ficha": "fabio-0310",
+   "linha": 2,
+   "regra": "assinatura_ausente",
+   "gravidade": "irregular"
+  },
+  {
+   "ficha": "fabio-0310",
+   "linha": 4,
+   "regra": "assinatura_ausente",
+   "gravidade": "irregular"
+  },
+  {
+   "ficha": "fabio-0310",
+   "linha": 8,
+   "regra": "assinatura_ausente",
+   "gravidade": "irregular"
+  },
+  {
+   "ficha": "fabio-0310",
+   "linha": 10,
+   "regra": "assinatura_ausente",
+   "gravidade": "irregular"
+  },
+  {
+   "ficha": "fabio-0310",
+   "linha": 5,
+   "regra": "assinatura_ausente",
+   "gravidade": "risco",
+   "nota": "so um visto"
+  },
+  {
+   "ficha": "fabio-0310",
+   "linha": 6,
+   "regra": "assinatura_ausente",
+   "gravidade": "risco",
+   "nota": "palavra entregue"
+  },
+  {
+   "ficha": "fabio-0310",
+   "linha": 9,
+   "regra": "assinatura_ausente",
+   "gravidade": "risco",
+   "nota": "outro nome"
+  },
+  {
+   "ficha": "bruno-0307",
+   "linha": 2,
+   "regra": "ca_vencido",
+   "gravidade": "risco",
+   "nota": "CA 28499 vencido em 2020"
+  },
+  {
+   "ficha": "bruno-0307",
+   "linha": 8,
+   "regra": "ca_nao_confere",
+   "gravidade": "risco",
+   "nota": "CA 21254 e de luva, linha e botina (inferido, confirmar)"
+  },
+  {
+   "ficha": "bruno-0307",
+   "linha": 9,
+   "regra": "ca_ausente",
+   "gravidade": "risco"
+  },
+  {
+   "ficha": "lucas-0306",
+   "linha": 3,
+   "regra": "assinatura_ausente",
+   "gravidade": "risco",
+   "nota": "iniciais"
+  },
+  {
+   "ficha": "lucas-0306",
+   "linha": 6,
+   "regra": "assinatura_ausente",
+   "gravidade": "risco",
+   "nota": "x"
+  },
+  {
+   "ficha": "lucas-0306",
+   "linha": 7,
+   "regra": "assinatura_ausente",
+   "gravidade": "risco",
+   "nota": "assinatura falhada"
+  },
+  {
+   "ficha": "wagner-0313",
+   "linha": 3,
+   "regra": "ca_nao_confere",
+   "gravidade": "risco",
+   "nota": "CA 10344 e de oculos, linha e luva"
+  },
+  {
+   "ficha": "wagner-0313",
+   "linha": 8,
+   "regra": "ca_nao_confere",
+   "gravidade": "risco",
+   "nota": "CA 12849 e de avental, linha e botina"
+  },
+  {
+   "ficha": "bruno-0307",
+   "linha": 3,
+   "regra": "ca_nao_confere",
+   "gravidade": "risco",
+   "nota": "CA 10344 e de oculos, linha e luva"
+  }
+ ]
+}

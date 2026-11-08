@@ -1,0 +1,112 @@
+{
+ "ficha_id": "wagner-0313",
+ "fonte": "transcrito pelo Claude a partir da foto, NÃO CONFERIDO",
+ "cabecalho": {
+  "nome": "Wagner Pinto Barros",
+  "matricula": "0313",
+  "funcao": "servente",
+  "data_admissao": "2026-02-09",
+  "treinamento": "2026-02-09"
+ },
+ "entregas": [
+  {
+   "linha": 1,
+   "data": "2026-02-09",
+   "epi": "capacete classe A",
+   "qtd": 1,
+   "ca": "29637",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 2,
+   "data": "2026-02-09",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "9182",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 3,
+   "data": "2026-02-09",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "1",
+   "assinatura": "presente",
+   "observacao": "CA de óculos numa luva (erro de registro plantado?)"
+  },
+  {
+   "linha": 4,
+   "data": "2026-02-09",
+   "epi": "óculos de proteção",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 5,
+   "data": "2026-02-09",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 6,
+   "data": "2026-05-14",
+   "epi": "luva de raspa",
+   "qtd": 2,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 7,
+   "data": "2026-07-27",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "T",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 8,
+   "data": "2026-08-03",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "12849",
+   "motivo": "T",
+   "assinatura": "presente",
+   "observacao": "12849 é de avental (erro plantado?) ou 12844 com 4 parecido com 9"
+  },
+  {
+   "linha": 9,
+   "data": "2026-09-15",
+   "epi": "luva de raspa",
+   "qtd": 2,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 10,
+   "data": "2026-10-01",
+   "epi": "óculos de proteção",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "T",
+   "assinatura": "presente"
+  }
+ ],
+ "fotos": [
+  {
+   "arquivo": "wagner-0313.jpg",
+   "condicao": "formulário impresso, reto",
+   "linhas_visiveis": "cabecalho + 1-10"
+  }
+ ]
+}

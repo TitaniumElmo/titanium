@@ -1,0 +1,98 @@
+{
+ "ficha_id": "bruno-0307",
+ "fonte": "gabarito da Sofia (fichas 7 a 10)",
+ "cabecalho": {
+  "nome": "Bruno Tavares Lins",
+  "matricula": "0307",
+  "funcao": "servente"
+ },
+ "entregas": [
+  {
+   "linha": 1,
+   "data": "2024-02-05",
+   "epi": "capacete classe A",
+   "qtd": 1,
+   "ca": "29637",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 2,
+   "data": "2024-02-05",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "28499",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 3,
+   "data": "2024-02-05",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 4,
+   "data": "2024-02-05",
+   "epi": "óculos de proteção",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 5,
+   "data": "2024-02-05",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 6,
+   "data": "2024-05-15",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 7,
+   "data": "2024-09-10",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 8,
+   "data": "2024-09-10",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "21254",
+   "motivo": "T",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 9,
+   "data": "2025-03-03",
+   "epi": "luva de raspa",
+   "qtd": 2,
+   "ca": null,
+   "motivo": "T",
+   "assinatura": "presente"
+  }
+ ],
+ "fotos": [
+  {
+   "arquivo": "bruno-0307.jpg",
+   "linhas_visiveis": "cabecalho + 1-9"
+  }
+ ]
+}

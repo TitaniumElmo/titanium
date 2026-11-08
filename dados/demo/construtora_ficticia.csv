@@ -1,0 +1,34 @@
+funcionario_id;nome;funcao;data;epi;qtd;ca;motivo;assinatura
+0401;Anderson Moreira Dias;pedreiro;2025-02-10;capacete;1;29637;E;sim
+0401;Anderson Moreira Dias;pedreiro;2026-06-15;botina;1;9182;E;sim
+0401;Anderson Moreira Dias;pedreiro;2026-06-25;protetor auditivo;1;820;E;sim
+0401;Anderson Moreira Dias;pedreiro;2026-09-20;protetor auditivo;1;17664;T;sim
+0402;Valdir Cardoso Neto;pedreiro;2025-03-05;capacete;1;29792;E;sim
+0402;Valdir Cardoso Neto;pedreiro;2026-06-02;botina;1;28499;E;sim
+0402;Valdir Cardoso Neto;pedreiro;2026-09-10;protetor auditivo;1;820;E;sim
+0403;Edson Barros Lopes;pedreiro;2025-04-14;capacete;1;29637;E;sim
+0403;Edson Barros Lopes;pedreiro;2026-07-01;botina;1;12844;E;sim
+0403;Edson Barros Lopes;pedreiro;2026-09-02;protetor auditivo;1;4026;E;não
+0404;Cláudia Ramos Pinto;servente;2025-06-09;capacete;1;29792;E;sim
+0404;Cláudia Ramos Pinto;servente;2026-08-03;botina;1;7236;E;sim
+0404;Cláudia Ramos Pinto;servente;2026-10-01;protetor auditivo;1;17664;E;sim
+0405;Tiago Menezes Rocha;servente;2025-05-20;capacete;1;29637;E;sim
+0405;Tiago Menezes Rocha;servente;2026-06-01;botina;1;25;E;sim
+0405;Tiago Menezes Rocha;servente;2026-09-25;protetor auditivo;1;820;E;sim
+0406;Wellington Prado Silva;servente;2025-07-07;capacete;1;29637;E;sim
+0406;Wellington Prado Silva;servente;2025-12-01;protetor auditivo;1;17664;E;sim
+0406;Wellington Prado Silva;servente;2026-07-20;bota de cano longo;1;40754;E;sim
+0407;Osvaldo Teixeira Matos;carpinteiro;2026-02-12;óculos de proteção;1;10344;E;sim
+0407;Osvaldo Teixeira Matos;carpinteiro;2026-06-30;protetor auditivo;1;17664;E;sim
+0407;Osvaldo Teixeira Matos;carpinteiro;2026-09-18;protetor auditivo;1;4026;T;sim
+0408;Reginaldo Farias Lima;carpinteiro;2026-03-10;óculos de proteção;1;103444;E;sim
+0408;Reginaldo Farias Lima;carpinteiro;2026-09-30;protetor auditivo;1;820;E;sim
+0409;Daniel Nogueira Freitas;carpinteiro;2026-01-20;óculos de proteção;1;3135;E;sim
+0409;Daniel Nogueira Freitas;carpinteiro;2026-10-05;protetor auditivo;1;17664;E;sim
+0410;Gilberto Amaral Duarte;armador;2026-09-12;protetor auditivo;1;820;E;sim
+0410;Gilberto Amaral Duarte;armador;2026-10-20;luva de raspa;1;1169;E;sim
+0411;Paulo Henrique Viana;armador;2026-08-25;protetor auditivo;1;17664;E;sim
+0411;Paulo Henrique Viana;armador;2026-10-15;luva de raspa;1;1171;E;não
+0412;Elias Carvalho Brandão;armador;2025-12-15;protetor auditivo;1;4026;E;sim
+0412;Elias Carvalho Brandão;armador;2026-08-20;protetor auditivo;1;17664;T;sim
+0412;Elias Carvalho Brandão;armador;2026-10-25;luva de raspa;1;1494;E;sim

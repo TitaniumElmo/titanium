@@ -1,0 +1,34 @@
+funcionario_id;nome;funcao;data;epi;qtd;ca;motivo;assinatura
+0501;Ivan Cordeiro Melo;pedreiro;2026-03-09;botina;1;9182;E;sim
+0501;Ivan Cordeiro Melo;pedreiro;2026-04-20;óculos de proteção;1;10344;E;sim
+0501;Ivan Cordeiro Melo;pedreiro;2026-09-14;protetor auditivo;1;17664;E;sim
+0501;Ivan Cordeiro Melo;pedreiro;2026-10-05;luva de raspa;1;1169;E;sim
+0502;Nilton Gomes Batista;pedreiro;2025-06-12;capacete;1;29637;E;sim
+0502;Nilton Gomes Batista;pedreiro;2026-02-16;botina;1;12844;E;sim
+0502;Nilton Gomes Batista;pedreiro;2026-05-04;óculos de proteção;1;3135;E;sim
+0502;Nilton Gomes Batista;pedreiro;2026-08-17;protetor auditivo;1;820;E;sim
+0502;Nilton Gomes Batista;pedreiro;2026-09-28;luva de raspa;1;1171;E;sim
+0503;Rogério Tavares Luz;servente;2025-09-08;capacete;1;29792;E;sim
+0503;Rogério Tavares Luz;servente;2026-06-01;botina;1;7236;E;sim
+0503;Rogério Tavares Luz;servente;2026-10-02;protetor auditivo;1;4026;E;sim
+0503;Rogério Tavares Luz;servente;2026-10-19;luva de raspa;1;1494;E;sim
+0504;Sandra Mara Ferraz;servente;2025-04-22;capacete;1;29637;E;sim
+0504;Sandra Mara Ferraz;servente;2026-01-26;botina;1;9182;E;sim
+0504;Sandra Mara Ferraz;servente;2026-09-21;protetor auditivo;1;17664;E;não
+0504;Sandra Mara Ferraz;servente;2026-10-12;luva de raspa;1;1169;E;sim
+0505;Elton Braga Moura;carpinteiro;2025-11-17;capacete;1;29792;E;sim
+0505;Elton Braga Moura;carpinteiro;2026-02-23;óculos de proteção;1;10344;E;sim
+0505;Elton Braga Moura;carpinteiro;2026-04-13;botina;1;12844;E;sim
+0505;Elton Braga Moura;carpinteiro;2026-10-08;protetor auditivo;1;820;E;sim
+0506;Cícero Andrade Lima;carpinteiro;2025-03-31;capacete;1;29637;E;sim
+0506;Cícero Andrade Lima;carpinteiro;2026-03-30;óculos de proteção;1;3135;E;sim
+0506;Cícero Andrade Lima;carpinteiro;2026-05-18;botina;1;7236;E;sim
+0506;Cícero Andrade Lima;carpinteiro;2026-08-24;protetor auditivo;1;4026;E;sim
+0507;Fabrício Leal Santana;armador;2025-03-10;botina;1;7236;E;sim
+0507;Fabrício Leal Santana;armador;2025-07-14;capacete;1;29792;E;sim
+0507;Fabrício Leal Santana;armador;2026-09-07;protetor auditivo;1;17664;E;sim
+0507;Fabrício Leal Santana;armador;2026-10-26;luva de raspa;1;1171;E;sim
+0508;Hélio Nascimento Pires;armador;2025-10-06;capacete;1;29637;E;sim
+0508;Hélio Nascimento Pires;armador;2026-06-22;botina;1;9182;E;sim
+0508;Hélio Nascimento Pires;armador;2026-09-25;luva de raspa;1;1494;E;sim
+0508;Hélio Nascimento Pires;armador;2026-10-10;protetor auditivo;1;820;E;sim

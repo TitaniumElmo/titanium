@@ -1,0 +1,86 @@
+{
+ "ficha_id": "lucas-0306",
+ "fonte": "gabarito da Sofia (ficha 6)",
+ "cabecalho": {
+  "nome": "Lucas Andrade Melo",
+  "matricula": "0306",
+  "funcao": "pedreiro"
+ },
+ "entregas": [
+  {
+   "linha": 1,
+   "data": "2024-10-03",
+   "epi": "capacete classe A",
+   "qtd": 1,
+   "ca": "29637",
+   "motivo": "1",
+   "assinatura": "presente",
+   "ca_escrito": "29.637"
+  },
+  {
+   "linha": 2,
+   "data": "2024-10-03",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "9182",
+   "motivo": "1",
+   "assinatura": "presente",
+   "ca_escrito": "9128 riscado, 9182"
+  },
+  {
+   "linha": 3,
+   "data": "2024-10-03",
+   "epi": "óculos de proteção",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "1",
+   "assinatura": "iniciais"
+  },
+  {
+   "linha": 4,
+   "data": "2024-10-03",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "21245",
+   "motivo": "1",
+   "assinatura": "presente",
+   "armadilha_visual": "assinatura invade a linha 5"
+  },
+  {
+   "linha": 5,
+   "data": "2024-10-03",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 6,
+   "data": "2025-04-03",
+   "epi": "luva de raspa",
+   "qtd": 2,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "x",
+   "armadilha_visual": "data '3/4/25'",
+   "linha_fisica": 7
+  },
+  {
+   "linha": 7,
+   "data": "2025-04-01",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "T",
+   "assinatura": "falhada",
+   "linha_fisica": 8
+  }
+ ],
+ "fotos": [
+  {
+   "arquivo": "lucas-0306.jpg",
+   "linhas_visiveis": "cabecalho + 1-7"
+  }
+ ]
+}

@@ -1,0 +1,112 @@
+{
+ "ficha_id": "fabio-0310",
+ "fonte": "gabarito da Sofia (ficha 10), corrigido pela foto: 10 linhas",
+ "cabecalho": {
+  "nome": "Fábio Nogueira Pires",
+  "matricula": "0310",
+  "funcao": "servente"
+ },
+ "entregas": [
+  {
+   "linha": 1,
+   "data": "2025-09-02",
+   "epi": "capacete classe A",
+   "qtd": 1,
+   "ca": "29637",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 2,
+   "data": "2025-09-02",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "9182",
+   "motivo": "1",
+   "assinatura": "ausente"
+  },
+  {
+   "linha": 3,
+   "data": "2025-09-02",
+   "epi": "luva de raspa",
+   "qtd": 1,
+   "ca": "21245",
+   "motivo": "1",
+   "assinatura": "presente"
+  },
+  {
+   "linha": 4,
+   "data": "2025-09-02",
+   "epi": "óculos de proteção",
+   "qtd": 1,
+   "ca": "10344",
+   "motivo": "1",
+   "assinatura": "ausente"
+  },
+  {
+   "linha": 5,
+   "data": "2025-09-02",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "T",
+   "assinatura": "visto",
+   "armadilha_visual": "só um visto"
+  },
+  {
+   "linha": 6,
+   "data": "2025-12-15",
+   "epi": "luva de raspa",
+   "qtd": 2,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "texto",
+   "armadilha_visual": "palavra 'entregue' na coluna"
+  },
+  {
+   "linha": 7,
+   "data": "2026-02-20",
+   "epi": "luva de raspa",
+   "qtd": 2,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "presente",
+   "armadilha_visual": "assinatura começa na coluna Motivo"
+  },
+  {
+   "linha": 8,
+   "data": "2026-06-10",
+   "epi": "botina de segurança",
+   "qtd": 1,
+   "ca": "12844",
+   "motivo": "T",
+   "assinatura": "ausente",
+   "armadilha_visual": "pontinho de caneta"
+  },
+  {
+   "linha": 9,
+   "data": "2026-08-10",
+   "epi": "protetor auricular plug",
+   "qtd": 1,
+   "ca": "17664",
+   "motivo": "T",
+   "assinatura": "outro_nome",
+   "nome_assinado": "Marcos"
+  },
+  {
+   "linha": 10,
+   "data": "2026-08-10",
+   "epi": "luva de raspa",
+   "qtd": 2,
+   "ca": "21245",
+   "motivo": "T",
+   "assinatura": "ausente"
+  }
+ ],
+ "fotos": [
+  {
+   "arquivo": "fabio-0310.jpg",
+   "linhas_visiveis": "cabecalho + 1-10"
+  }
+ ]
+}

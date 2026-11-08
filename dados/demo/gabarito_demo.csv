@@ -1,0 +1,36 @@
+funcionario_id;linha;achado_esperado;caso
+0401;1;nenhum;1 regular
+0401;2;nenhum;1 regular
+0401;3;nenhum;1 regular
+0401;4;nenhum;1 regular
+0402;5;nenhum;1 regular
+0402;6;ca_vencido;2 CA vencido na entrega
+0402;7;nenhum;1 regular
+0403;8;nenhum;1 regular
+0403;9;nenhum;1 regular
+0403;10;assinatura_ausente;3 sem assinatura
+0404;11;nenhum;1 regular
+0404;12;nenhum;1 regular
+0404;13;nenhum;1 regular
+0405;14;nenhum;1 regular
+0405;15;ca_vencido;2 CA vencido na entrega
+0405;16;nenhum;1 regular
+0406;17;nenhum;1 regular
+0406;18;nenhum;4 troca atrasada (achado do funcionário)
+0406;19;ca_cancelado;6 CA suspenso na base
+0407;20;nenhum;1 regular
+0407;21;nenhum;1 regular
+0407;22;nenhum;1 regular
+0408;23;ca_nao_encontrado;5 CA digitado errado
+0408;24;nenhum;1 regular
+0409;25;nenhum;1 regular
+0409;26;nenhum;1 regular
+0410;27;nenhum;1 regular
+0410;28;nenhum;1 regular
+0411;29;nenhum;1 regular
+0411;30;assinatura_ausente;3 sem assinatura
+0412;31;nenhum;4 troca atrasada (achado do funcionário)
+0412;32;nenhum;4 troca atrasada (achado do funcionário)
+0412;33;nenhum;1 regular
+0406;;troca_atrasada;4 troca atrasada (achado do funcionário)
+0412;;troca_passado;4 troca passada (passivo, achado do funcionário)

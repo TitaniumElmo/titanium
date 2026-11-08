@@ -1,0 +1,14 @@
+{
+  "ficha_id": "jose-antonio-0303",
+  "transcrito_por": "Claude, a partir da foto — CONFERIR",
+  "cabecalho": {"empresa": "Construtora Horizonte Ltda", "cnpj": "00.000.000/0001-00", "nome": "José Antônio Ferreira",
+                "matricula": "0303", "funcao": "Eletricista", "data_admissao": "2022-02-15", "treinamento": "2022-02-15"},
+  "entregas": [
+    {"linha": 1, "data": "2022-02-15", "epi": "capacete classe A", "qtd": 1, "ca": "32260", "motivo": "1", "assinatura": "José", "observacao": "'sim' riscado antes do nome"},
+    {"linha": 2, "data": "2022-02-15", "epi": "botina de segurança", "qtd": 1, "ca": "35841", "motivo": "1", "assinatura": "José"},
+    {"linha": 3, "data": "2022-02-15", "epi": "luva de raspa", "qtd": 1, "ca": "267449", "motivo": "1", "assinatura": "José", "observacao": "CA com 6 dígitos, leitura duvidosa"},
+    {"linha": 4, "data": "2022-02-15", "epi": "óculos de proteção", "qtd": 1, "ca": "15649", "motivo": "1", "assinatura": "José"},
+    {"linha": 5, "data": "2022-10-15", "epi": "botina de segurança", "qtd": 1, "ca": "35841", "motivo": "T", "assinatura": "José"}
+  ],
+  "fotos": [{"arquivo": "jose-antonio-0303.jpg", "condicao": "formulário impresso, reto, caneta azul", "linhas_visiveis": "cabecalho + 1-5"}]
+}
