@@ -172,6 +172,8 @@ def _t_buscar_ca_proximo(ctx: Contexto, args: dict) -> Resultado:
 
 GRUPO_CONFERIR_CA = "conferir_ca"
 REGRAS_PAPEL_X_PLANILHA = {"entrega_sem_ficha", "ficha_sem_planilha"}  # do Gustavo; sempre risco
+# Falhas que podem deixar o trabalhador sem proteção hoje: prazo padrão de 2 dias (o LLM pode pôr 1).
+REGRAS_SEM_PROTECAO = {"troca_atrasada", "epi_inadequado", "ca_cancelado"}
 REGRAS_DA_ASSINATURA = {"assinatura_ausente", "entrega_sem_ficha"}  # o que a conferência do papel reavalia
 
 
@@ -276,7 +278,8 @@ def criar_conferencia(ctx: Contexto) -> Pendencia | None:
     else:  # só datas ou regras ainda fora do contrato: um achado de risco aceito pelo contrato ancora a pendência
         ancora = {"id": f"leitura-{ctx.funcionario_id}", "funcionario_id": ctx.funcionario_id,
                   "auditoria_id": ctx.auditoria_id, "linha": None,
-                  "regra": "falha_de_ferramenta",  # PROPOSTA ao Pierre: regra "leitura_incerta"
+                  # "leitura_incerta" entra no contrato com o PR #8; até lá, a regra antiga ancora a pendência
+                  "regra": "leitura_incerta" if "leitura_incerta" in REGRAS_DO_CONTRATO else "falha_de_ferramenta",
                   "gravidade": "risco", "tipo": "corrigivel", "grupo": GRUPO_CONFERIR_CA,
                   "evidencia": "; ".join(itens)[:300], "acao_sugerida": "conferir na ficha física"}
         ctx.achados[ancora["id"]] = ancora
@@ -446,7 +449,8 @@ def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, pr
     try:
         dias = max(1, min(30, int(prazo_dias)))
     except (TypeError, ValueError):
-        dias = 5
+        # Sem prazo informado: quem pode estar SEM PROTEÇÃO HOJE tem prazo curto por padrão (preventivo).
+        dias = 2 if achado.get("regra") in REGRAS_SEM_PROTECAO and achado.get("gravidade") != "ok" else 5
     prazo = (date.today() + timedelta(days=dias)).isoformat()
     p = IMPL["criar_pendencia"](achado, destino, acao, prazo)
     ctx.pendencias.append(p)
