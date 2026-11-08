@@ -11,7 +11,7 @@ from heitor.dados.funcoes import categoria_epi, exigencia_funcao
 _ids = itertools.count(1)
 
 LIMITE_ASSINATURA = 0.7
-REGRAS_FORA_DO_CONTRATO = {"funcao_desconhecida", "entrega_sem_ficha", "ficha_sem_planilha"}
+REGRAS_FORA_DO_CONTRATO = {"funcao_desconhecida", "entrega_sem_ficha", "ficha_sem_planilha", "troca_passado"}
 CAMPOS_EXTRAS = ("na_ficha", "assinatura_tipo", "assinatura_texto", "leitura_assinatura", "conferencia_ca")
 TIPOS_ASSINATURA_DUVIDOSA = {
     "texto": "na coluna de assinatura há texto{t}, não uma assinatura",
@@ -171,12 +171,15 @@ def audita_funcionario(linhas: list[Linha], funcao: str, hoje=None) -> list[Acha
                                    f"nenhuma entrega de {cat} na ficha; a função exige ({exig['agente_nocivo']})",
                                    f"entregar {cat}, registrar com o CA e colher a assinatura"))
             continue
-        for a, b in zip(datas, datas[1:] + [hoje]):
+        for a, b in zip(datas, datas[1:]):
             if (b - a).days > vida_util:
-                achados.append(_achado(fid, None, "troca_atrasada", "irregular", "corrigivel",
+                achados.append(_achado(fid, None, "troca_passado", "irregular", "passivo",
                                        f"{cat}: {(b - a).days} dias entre {a} e {b}; vida útil {vida_util} dias",
-                                       f"trocar {cat} agora"))
-                break
+                                       "registrar no relatório (não tem conserto)"))
+        if (hoje - datas[-1]).days > vida_util:
+            achados.append(_achado(fid, None, "troca_atrasada", "irregular", "corrigivel",
+                                   f"{cat}: {(hoje - datas[-1]).days} dias entre {datas[-1]} e {hoje}; vida útil {vida_util} dias",
+                                   f"trocar {cat} agora"))
     return achados
 
 
