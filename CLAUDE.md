@@ -221,6 +221,8 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 | GET | `/eventos` | **SSE com tudo o que o Heitor faz**, de todas as auditorias, inclusive as disparadas pelo vigia | Feed da tela principal |
 | GET | `/fontes` | O que o vigia observa, última verificação, último disparo, fotos sem dono | Equipe |
 | POST | `/fontes/verificar` | Força uma verificação da pasta agora (depuração) | Equipe |
+| POST | `/fontes` | **Troca a pasta do Drive** que o vigia observa (`{"url": link da pasta}`). Exige o token de admin. Confere o acesso antes (pasta não compartilhada com a conta de serviço → 400, a atual continua). **Um vigia só**: vale para todos e apaga o estado em memória, como o reset | Tela de Fontes (time) |
+| POST | `/fontes/padrao` | Volta à pasta do `.env`. Exige o token de admin | Tela de Fontes (time) |
 | GET | `/auditorias/{id}/achados` | Achados com tipo, gravidade e evidência | Lista de achados |
 | GET | `/auditorias/{id}/relatorio` | Relatório com normas e súmulas | Relatório |
 | GET | `/pendencias` | Lista, filtros `auditoria_id`, `destino`, `status` | Painel de pendências |
@@ -240,6 +242,7 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compr
 - **Foto na pasta = anexo do funcionário** (matrícula no nome do arquivo), nunca fonte de dados. Foto sem dono aparece em `GET /fontes`.
 - **Conciliação** depois da auditoria disparada: o problema sumiu → **fecha** a pendência; continua → fica como está (sem duplicar nem reavisar); a linha antiga foi **apagada** → **não fecha** (apagar não corrige); a regra não rodou → não fecha.
 - **Nunca altera a pasta:** só lê.
+- **Pasta trocável na hora** (`POST /fontes`, decidido em 08/11): uma pasta por vez, sem contas. `GET /fontes` diz `personalizada`, `link` e `conta_servico` (com quem compartilhar).
 - **Tempo medido (Drive real):** ~22 s da edição até a auditoria (~15 s são o atraso do Google), mais 15 a 40 s do agente com LLM para 1 ou 2 funcionários.
 - O Google Sheets tira o zero da frente das matrículas (`0302` → `302`): formatar a coluna como texto. A ligação de foto ignora zeros à esquerda.
 - **"Edição detectada" no feed** (`GET /eventos`, `auditoria_id: "vigia"`): sai assim que a **versão** da planilha muda (~3 s), antes de o Google refletir o conteúdo; uma vez por edição.

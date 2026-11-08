@@ -45,8 +45,8 @@ async def ciclo_de_vida(app: FastAPI):
         v = None
     relogio = None if v else cobranca.iniciar_relogio(config.COBRANCA_INTERVALO_S)
     yield
-    if v:
-        v.parar()
+    if vigia.vigia:  # o atual: o time pode ter trocado a pasta (POST /fontes)
+        vigia.vigia.parar()
     if relogio:
         relogio.set()
 
