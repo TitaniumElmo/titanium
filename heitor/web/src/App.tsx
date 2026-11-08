@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Carregando, LimiteDeErro } from "./componentes/Estados";
 import { IntroElmo } from "./componentes/IntroElmo";
+import { AvisoConferindo } from "./componentes/AvisoConferindo";
 import { ControlesDemo, FaixaDemo } from "./componentes/ControlesDemo";
 import { Sidebar } from "./componentes/Sidebar";
 import { ProvedorEstado } from "./estado";
@@ -38,6 +39,7 @@ export function App() {
         <Sidebar />
         <main className="min-h-dvh menu:pl-60">
           <FaixaDemo />
+          <AvisoConferindo />
           <Conteudo>
           <Routes>
             <Route path="/" element={<Inicio />} />
