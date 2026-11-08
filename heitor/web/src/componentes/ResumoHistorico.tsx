@@ -20,7 +20,7 @@ function ConteudoCartao({ rotulo, valor, detalhe, urgente, icone }: { rotulo: st
         <span className="size-4 shrink-0 sm:size-5" aria-hidden>
           {icone}
         </span>
-        <span className="whitespace-nowrap text-2xl font-semibold tabular-nums sm:text-3xl sm:leading-none">{valor}</span>
+        <span className={cn("whitespace-nowrap font-semibold tabular-nums sm:leading-none", String(valor).length > 6 ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl")}>{valor}</span>
       </span>
       <span className="text-sm leading-snug text-apoio sm:text-base">{detalhe}</span>
     </>

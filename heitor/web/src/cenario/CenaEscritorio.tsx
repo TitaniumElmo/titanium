@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { dolares } from "../formato";
 import type { Evento } from "../tipos";
 import { cn } from "../util";
 import { CABINES, type Cabine, ContornoAtivo, Divisorias, Escurecimento, FundoCabines, NumeroDoChao, PlacaCabine } from "./Cabines";
+import { traduzir } from "../linguagemLog";
 import { larguraTexto, TextoPixel } from "./TextoPixel";
 
 const LARGURA = 540;
@@ -144,9 +144,9 @@ function seloDoEvento(e: Evento): Selo["tipo"] {
 
 function textoBalao(e: Evento): string {
   let t: string;
-  if (e.tipo === "decisao") t = `PENSANDO: ${e.saida.pensamento ?? e.saida.resumo}`;
-  else if (e.tipo === "erro") t = e.ferramenta === "modelo_indisponivel" ? "⚠️ MODO DEGRADADO: seguindo pelas regras" : `⚠️ ${e.saida.resumo}`;
-  else t = `${e.ferramenta}: ${e.saida.resumo}`;
+  if (e.tipo === "decisao") t = `DECIDIU: ${e.saida.pensamento ?? e.saida.resumo}`;
+  else if (e.tipo === "erro") t = e.ferramenta === "modelo_indisponivel" ? "ATENÇÃO: IA fora do ar, seguindo pelas regras" : `ATENÇÃO: ${e.saida.resumo}`;
+  else t = `${traduzir(e).titulo}: ${e.saida.resumo}`;
   return t.length > 48 ? `${t.slice(0, 47)}…` : t;
 }
 
@@ -600,8 +600,6 @@ export function CenaEscritorio({
     };
   }, []);
 
-  const custos = eventos.map((e) => e.custo_usd);
-  const total = custos.reduce((s, c) => s + c, 0);
   const restantes = Math.max(0, fichasNaPilha - (rodando ? pegas : 0));
   const textoContador = `${restantes} ${restantes === 1 ? "FICHA" : "FICHAS"}`;
 
@@ -685,25 +683,6 @@ export function CenaEscritorio({
             </div>
           </div>
         </div>
-        {escala === 2 && (
-          <div
-            className="pointer-events-none absolute z-20 w-40 rounded-selo border border-log-borda bg-log-fundo/90 px-2 py-1.5 font-mono text-xs leading-4 text-log-apoio"
-            style={{ left: 6, top: 42 }}
-          >
-            <div className="flex justify-between">
-              <span>passos</span>
-              <span className="text-log-texto">{eventos.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>custo</span>
-              <span className="text-log-texto">{dolares(total)}</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-log-fraco">
-              <span className={cn("size-1.5 rounded-full", rodando ? "animar-pulsar bg-acento" : "bg-log-fraco")} />
-              {rodando ? "executando" : "vigiando"}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
