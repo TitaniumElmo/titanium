@@ -267,16 +267,17 @@ def test_evento_global_aparece_no_feed_de_eventos(client):
 # -- 6. Fluxo do RH ----------------------------------------------------------------------------------
 
 
-def test_rh_responde_com_upload_e_a_pendencia_fecha(client, tmp_path):
+def test_rh_responde_com_upload_e_a_pendencia_aguarda_conferencia(client, tmp_path):
     aud = auditar_exemplo(client)
     p = pendencia(client, aud["id"], "ca_vencido", "0302")
     assert p["destino"] == "rh" and p["prioridade"] == "normal"
     nf = tmp_path / "nota_fiscal.pdf"
     nf.write_bytes(b"%PDF-1.4 falso")
     depois = responder(client, p["id"], nf).json()
-    assert depois["status"] == "fechada"
+    # Nota fiscal não tem entregas do funcionário: o agente real não decide sozinho (#24).
+    assert depois["status"] == "aguardando"
     etapas = [(h["etapa"], h["ator"]) for h in depois["historico"][1:]]
-    assert etapas == [("comprovar", "rh"), ("conferir", "agente")]
+    assert etapas == [("comprovar", "rh")]
     assert client.options("/pendencias", headers={"Origin": "http://localhost:5173",
                                                   "Access-Control-Request-Method": "GET"}).headers[
         "access-control-allow-origin"] == "*"

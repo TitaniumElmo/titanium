@@ -53,8 +53,8 @@ def test_upload_grande_e_recusado_sem_deixar_arquivo(client, monkeypatch):
 def test_tipo_de_arquivo_recusado(client):
     r = client.post("/auditorias", files=[("arquivos", ("script.exe", b"MZ", "application/octet-stream"))])
     assert r.status_code == 415
-    r = client.post("/auditorias", files=[("arquivos", ("nota.pdf", b"%PDF", "application/pdf"))])
-    assert r.status_code == 415  # PDF só na resposta a pendência (nota fiscal do RH)
+    r = client.post("/auditorias", files=[("arquivos", ("ficha.pdf", b"%PDF", "application/pdf"))])
+    assert r.status_code == 202  # ficha arquivada em PDF (lida pela extração, #24)
 
 
 def test_muitos_arquivos_recusado(client, monkeypatch):
@@ -70,4 +70,5 @@ def test_resposta_do_rh_aceita_pdf(client):
     esperar(client, r.json()["id"])
     rh = client.get("/pendencias", params={"auditoria_id": r.json()["id"], "destino": "rh"}).json()[0]
     r = client.post(f"/pendencias/{rh['id']}/resposta", files={"arquivo": ("nota_fiscal.pdf", b"%PDF-1.4", "application/pdf")})
-    assert r.status_code != 415
+    # Documento sem entregas do funcionário: não fecha sozinho, fica aguardando uma pessoa conferir.
+    assert r.status_code == 200 and r.json()["status"] == "aguardando"

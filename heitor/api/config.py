@@ -25,7 +25,7 @@ VIGIA_INTERVALO_S = float(os.getenv("HEITOR_VIGIA_INTERVALO", "10"))
 COBRANCA_INTERVALO_S = float(os.getenv("HEITOR_COBRANCA_INTERVALO", "60"))
 
 # Segurança (heitor/api/seguranca.py). Lidas na hora, para o .env e os testes valerem.
-EXTENSOES_UPLOAD = {".csv", ".jpg", ".jpeg", ".png", ".webp"}
+EXTENSOES_UPLOAD = {".csv", ".pdf", ".jpg", ".jpeg", ".png", ".webp"}  # PDF: ficha arquivada (#24)
 
 
 def token_admin() -> str:
