@@ -1,6 +1,6 @@
-# API do Heitor para o Hugging Face Spaces (SDK Docker; a porta 7860 é a padrão do Spaces).
+# API do Heitor (deploy no Railway; ver DEPLOY.md). A porta vem de $PORT (o Railway define).
 # Teste local:
-#   docker build --build-arg CAEPI_URL=<url do .gz> -t heitor .
+#   docker build -t heitor .
 #   docker run -p 7860:7860 --env-file .env heitor   ->  http://localhost:7860
 FROM python:3.12-slim
 
@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HEITOR_UPLOADS=/tmp/heitor-uploads \
     PORT=7860
 
-# O Spaces roda o container com o usuário 1000.
+# Usuário sem privilégios (uid 1000).
 RUN useradd -m -u 1000 user
 WORKDIR /app
 
