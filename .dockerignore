@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+data/
+dados/
+fotos_teste/
+node_modules/
+heitor/web/node_modules/
+**/__pycache__/
+.pytest_cache/
+*.pyc

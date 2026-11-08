@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()  # antes de importar o resto: config lê as variáveis de ambiente
 
 from fastapi import Depends, FastAPI  # noqa: E402
+from fastapi.responses import RedirectResponse  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from heitor.api import cobranca, config, integracao, seguranca, vigia  # noqa: E402
@@ -64,6 +65,12 @@ app.include_router(pendencias.router)
 app.include_router(ca.router)
 app.include_router(fontes.router)
 app.include_router(eventos.router)
+
+
+@app.get("/", include_in_schema=False)
+def inicio() -> RedirectResponse:
+    """Quem abre o link do deploy cai na documentação interativa da API."""
+    return RedirectResponse("/docs")
 
 
 @app.get("/health", tags=["sistema"])
