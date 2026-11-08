@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { acoes, CONTA_SERVICO, useMundo, useProximaLeitura } from "../api";
+import { acoes, CONTA_SERVICO, SUPORTA, useMundo, useProximaLeitura } from "../api";
 import { Botao, Cartao } from "../componentes/base";
 import { Pagina } from "../componentes/Pagina";
 import { CartaoNumero } from "../componentes/ResumoHistorico";
@@ -189,12 +189,14 @@ function FonteConectada({ fonte, lendo }: { fonte: Fonte; lendo: boolean }) {
             <h2 className="text-base font-semibold sm:text-lg">{fonte.empresa}</h2>
             <Selo>{fonte.tipo === "planilha" ? "Planilha" : "Pasta do Drive"}</Selo>
           </div>
-          <p className="mt-1 break-all font-mono text-sm text-fraco">{fonte.url}</p>
+          {fonte.url && <p className="mt-1 break-all font-mono text-sm text-fraco">{fonte.url}</p>}
           <p className="mt-2 text-sm text-apoio sm:text-base">O {NOME_AGENTE} só lê esta planilha. Ele nunca altera.</p>
         </div>
-        <Botao variante="fantasma" onClick={acoes.desconectarFonte}>
-          Desconectar
-        </Botao>
+        {SUPORTA.desconectarFonte && (
+          <Botao variante="fantasma" onClick={acoes.desconectarFonte}>
+            Desconectar
+          </Botao>
+        )}
       </Cartao>
 
       <section aria-label="Situação da leitura" className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">

@@ -20,6 +20,8 @@ import type {
 export type FuncionarioBase = { funcionario_id: string; nome: string; funcao: string };
 
 export type Mundo = {
+  /** true = dados da API de verdade (servidor.ts); ausente = simulação (este arquivo). */
+  ao_vivo?: boolean;
   deslocamento_ms: number;
   fonte: Fonte | null;
   funcionarios: FuncionarioBase[];

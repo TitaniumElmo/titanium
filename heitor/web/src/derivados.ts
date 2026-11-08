@@ -133,12 +133,13 @@ export function relatorio(m: Mundo, hoje: string, dias: number): Relatorio {
     const data = isoDia(base - i * DIA);
     const indice = Math.floor(paraMs(data) / DIA);
     const doDia = m.achados.filter((a) => isoDia(new Date(a.ts)) === data);
-    const tendencia = Math.max(0, 1 - (dias - i) / (dias * 1.6));
+    // Ruído só na simulação; com a API, a série mostra só o que existe.
+    const tendencia = m.ao_vivo ? 0 : Math.max(0, 1 - (dias - i) / (dias * 1.6));
     serie.push({
       data,
       irregular: doDia.filter((a) => a.gravidade === "irregular").length + Math.round(semente(indice) * 3 * tendencia),
       risco: doDia.filter((a) => a.gravidade === "risco").length + Math.round(semente(indice + 7) * 2 * tendencia),
-      ok: 10 + Math.round(semente(indice + 13) * 8),
+      ok: m.ao_vivo ? doDia.filter((a) => a.gravidade === "ok").length : 10 + Math.round(semente(indice + 13) * 8),
     });
   }
 
@@ -175,6 +176,6 @@ export function relatorio(m: Mundo, hoje: string, dias: number): Relatorio {
     exposicao_por_funcao: [...porFuncao.entries()].map(([funcao, valor]) => ({ funcao, valor })).sort((a, b) => b.valor - a.valor),
     custo_medio_ficha_usd: fichas ? custo / fichas : 0,
     passos_medios: concluidas.length ? eventos.length / concluidas.length : 0,
-    acerto: { precisao: 0.94, recall: 0.9 },
+    acerto: m.ao_vivo ? null : { precisao: 0.94, recall: 0.9 }, // com a API: sem gabarito, não há acerto a mostrar
   };
 }
