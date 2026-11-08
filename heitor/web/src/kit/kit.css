@@ -1,0 +1,46 @@
+/* REFERÊNCIA — não é parte oficial do site. Trazido do sistema Carvalho & Felinto como inspiração; pode ser usado, adaptado ou descartado. */
+
+/* Tokens e animação do kit (Tailwind v4). Importe depois do Tailwind:
+     @import "tailwindcss";
+     @import "./kit/kit.css";
+   As cores aqui são só neutras de exemplo — troque pelas do Heitor. Se o projeto usar shadcn, ele
+   já define esses mesmos nomes: aí apague o bloco @theme e fique só com a animação. */
+
+@theme {
+  --color-primary: #171717;
+  --color-primary-foreground: #ffffff;
+  --color-foreground: #171717;
+  --color-muted-foreground: #737373;
+  --color-secondary: #f5f5f5;
+  --color-border: #e5e5e5;
+  --color-card: #ffffff;
+  --color-destructive: #dc2626;
+  --color-ring: #a3a3a3;
+}
+
+/* Entrada suave (sobe um pouco + aparece). Trocar o `key` do elemento faz a animação rodar de
+   novo — é o que dá o efeito de "trocar o conteúdo" no login */
+@keyframes kit-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(var(--kit-entrar-y, 8px));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.kit-entrar {
+  animation: kit-entrar 500ms ease-out both;
+}
+
+.kit-entrar-longe {
+  --kit-entrar-y: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-entrar {
+    animation: none;
+  }
+}
