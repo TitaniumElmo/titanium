@@ -340,6 +340,7 @@ def _t_auditar_ficha(ctx: Contexto, args: dict) -> Resultado:
             grupos["passivo"].append(r)
     datas = sorted(str(l["data"]) for l in ctx.linhas.values() if l.get("data"))
     return Resultado({
+        "funcao": ctx.funcao,  # a tela lê a função daqui (o LLM nem sempre chama exigencia_funcao)
         "linhas_auditadas": len(ctx.linhas), "periodo": f"{datas[0]} a {datas[-1]}" if datas else None,
         "sem_falhas": not falhas, **{k: v for k, v in grupos.items() if v},
         # Só quando há itens: o aviso sempre presente fez o LLM ignorar falhas de outros grupos.

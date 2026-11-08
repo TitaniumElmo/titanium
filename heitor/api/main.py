@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from heitor.api import cobranca, config, integracao, seguranca, vigia  # noqa: E402
 from heitor.api.estado import estado  # noqa: E402
 from heitor.api.modelos import Auditoria  # noqa: E402
-from heitor.api.rotas import auditorias, ca, eventos, fontes, pendencias  # noqa: E402
+from heitor.api.rotas import auditorias, ca, eventos, fichas, fontes, pendencias  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -65,6 +65,7 @@ app.include_router(pendencias.router)
 app.include_router(ca.router)
 app.include_router(fontes.router)
 app.include_router(eventos.router)
+app.include_router(fichas.router)
 
 
 @app.get("/", include_in_schema=False)
