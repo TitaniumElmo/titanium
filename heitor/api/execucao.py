@@ -153,6 +153,14 @@ def rodar_auditoria(auditoria_id: str, arquivos: list[str], fotos: Optional[list
             log.exception("falha ao ler %s", arquivo)
             _erro(auditoria_id, None, f"extrair_ficha({Path(arquivo).name})", exc)
     auditar_linhas(auditoria_id, linhas, fotos=ligar_fotos(auditoria_id, linhas, pares))
+    # Planilha corrigida subida de novo pela tela: fecha o que foi corrigido, como o vigia faz com a pasta.
+    # (Antes só o vigia conciliava: quem não tem a pasta do Drive, como um jurado, não via a pendência fechar.)
+    try:
+        from heitor.api.vigia import conciliar
+
+        conciliar(auditoria_id, linhas)
+    except Exception:
+        log.exception("conciliação da auditoria %s falhou", auditoria_id)
 
 
 def ligar_fotos(auditoria_id: str, linhas: list[Linha], pares: list[tuple[str, Optional[str]]]) -> dict[str, str]:
