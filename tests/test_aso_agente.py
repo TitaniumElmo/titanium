@@ -53,3 +53,32 @@ def test_relatorio_explica_as_regras_de_aso(exames):
         r = grafo.rodar_auditoria("au-aso-rel", [_epi("0503", "carpinteiro")])
     itens = [i for i in r["relatorio"]["itens"] if i["titulo"] == "Funcionário ativo sem ASO"]
     assert itens and any("NR-7" in b for b in itens[0]["base_legal"])
+
+
+def test_uma_pendencia_cobre_exame_e_epi(exames):
+    """criar_pendencia com 'tambem': uma ida só do técnico para o exame e o EPI do mesmo funcionário."""
+    ctx = F.Contexto(funcionario_id="0502", funcao="servente", linhas={}, auditoria_id="au-t")
+    epi = {"id": "a-epi", "funcionario_id": "0502", "auditoria_id": "au-t", "linha": 1, "regra": "troca_atrasada",
+           "gravidade": "irregular", "tipo": "corrigivel", "evidencia": "protetor vencido", "acao_sugerida": "trocar"}
+    aso = {"id": "a-aso", "funcionario_id": "0502", "auditoria_id": "au-t", "linha": None,
+           "regra": "aso_periodico_vencido", "gravidade": "irregular", "tipo": "corrigivel",
+           "evidencia": "periódico vencido", "acao_sugerida": "agendar o exame periódico"}
+    rh = {**aso, "id": "a-rh", "regra": "aso_sem_medico", "gravidade": "risco", "tipo": "prova"}
+    ctx.achados.update({a["id"]: a for a in (epi, aso, rh)})
+    r = F.executar("criar_pendencia", {"achado_id": "a-epi", "acao": "Trocar o protetor e agendar o periódico",
+                                       "prazo_dias": 2, "tambem": ["a-aso", "a-rh", "nao-existe"]}, ctx)
+    assert r.saida["tambem_cobre"] == ["a-aso"]
+    assert set(r.saida["tambem_recusados"]) == {"a-rh", "nao-existe"}  # RH tem destino próprio
+    assert ctx.pendencia_por_achado["a-aso"] == ctx.pendencia_por_achado["a-epi"]
+    assert "a-rh" not in ctx.pendencia_por_achado
+
+
+def test_auditar_ficha_traz_os_exames_e_nao_diz_sem_falhas(exames):
+    """Com a flag, o LLM vê EPI e ASO juntos no primeiro passo (senão criava as de EPI antes de ver o exame)."""
+    linha = _epi("0505", "pedreiro")
+    ctx = F.Contexto(funcionario_id="0505", funcao="pedreiro", linhas={1: linha}, auditoria_id="au-t")
+    with stubs_de_dados():
+        r = F.executar("auditar_ficha", {}, ctx)
+    regras = [a["regra"] for a in r.saida["exames_aso"]["achados_aso"]]
+    assert regras == ["aso_inapto_em_atividade"] and r.saida["sem_falhas"] is False
+    assert all(a.get("auditoria_id") == "au-t" for a in ctx.achados_do_funcionario())
