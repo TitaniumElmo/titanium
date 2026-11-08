@@ -331,7 +331,7 @@ function paraFonte(f: FontesApi | null, temAuditoria: boolean): Fonte | null {
     .map((c) => ({ coluna: c.coluna, campo: c.campo as string, confianca: c.confianca ?? 0 }));
   return {
     id: "f-1",
-    url: URL_PLANILHA,
+    url: (f as FontesApi & FonteExtraApi).link || URL_PLANILHA, // a pasta que o vigia observa
     empresa: cache.empresa,
     tipo: /drive/i.test(f.fonte) ? "pasta" : "planilha",
     status: f.ultimo_erro ? "erro" : "conectada",
@@ -486,4 +486,65 @@ export function resetarDemo() {
 export function atualizarConfig(parcial: Partial<Configuracao>) {
   cache.config = { ...cache.config, ...parcial }; // só nesta tela: a API não tem configurações
   atualizar();
+}
+
+// ------------------------------------------------------------- troca de pasta ---
+// POST /fontes (#37): uma pasta por vez, só o time (token de admin). A troca vale para todos
+// e apaga o estado em memória do servidor, como o reset da demo.
+
+type FonteExtraApi = { link?: string | null; conta_servico?: string | null; personalizada?: boolean };
+
+const CHAVE_TOKEN = "elmo-token-admin";
+
+export function tokenGuardado(): string {
+  try {
+    return window.sessionStorage.getItem(CHAVE_TOKEN) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function guardarToken(token: string) {
+  try {
+    window.sessionStorage.setItem(CHAVE_TOKEN, token);
+  } catch {
+    /* sem sessionStorage: pede de novo na próxima vez */
+  }
+}
+
+/** Com quem compartilhar a pasta e se ela foi trocada pela tela (lido do GET /fontes). */
+export function detalhesDaFonte(): { conta_servico: string | null; personalizada: boolean } {
+  const f = cache.fontes as (FontesApi & FonteExtraApi) | null;
+  return { conta_servico: f?.conta_servico ?? null, personalizada: !!f?.personalizada };
+}
+
+async function postAdmin(caminho: string, token: string, corpo?: unknown): Promise<string | null> {
+  try {
+    const r = await fetch(`${BASE}${caminho}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.trim()}` },
+      body: corpo === undefined ? undefined : JSON.stringify(corpo),
+    });
+    if (r.ok) {
+      guardarToken(token.trim());
+      esquecerTudo(); // o servidor apagou o estado: a tela também
+      void consultar();
+      return null;
+    }
+    if (r.status === 401) return "Senha do time incorreta.";
+    const erro = (await r.json().catch(() => null)) as { detail?: unknown } | null;
+    return typeof erro?.detail === "string" ? erro.detail : `O servidor recusou (${r.status}).`;
+  } catch {
+    return "Não consegui falar com o servidor.";
+  }
+}
+
+/** Troca a pasta observada. Devolve null se deu certo, ou a mensagem para mostrar na tela. */
+export function trocarPasta(url: string, token: string, empresa?: string): Promise<string | null> {
+  if (empresa?.trim()) cache.empresa = empresa.trim();
+  return postAdmin("/fontes", token, { url: url.trim() });
+}
+
+export function voltarPastaPadrao(token: string): Promise<string | null> {
+  return postAdmin("/fontes/padrao", token);
 }

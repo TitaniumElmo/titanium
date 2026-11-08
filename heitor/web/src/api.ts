@@ -17,6 +17,7 @@ export const SUPORTA = {
   avancarRelogio: MODO === "mock",
   desconectarFonte: MODO === "mock",
   rodarExemplo: MODO === "api",
+  trocarPasta: MODO === "api", // POST /fontes: uma pasta por vez, com a senha do time
 };
 
 export function useMundo(): Mundo {
@@ -49,7 +50,12 @@ export const acoes = {
   resetarDemo: loja.resetarDemo,
   atualizarConfig: loja.atualizarConfig,
   rodarExemplo: servidor.rodarExemplo,
+  trocarPasta: servidor.trocarPasta,
+  voltarPastaPadrao: servidor.voltarPastaPadrao,
 };
+
+export const detalhesDaFonte = servidor.detalhesDaFonte;
+export const tokenGuardado = servidor.tokenGuardado;
 
 export const agora = loja.agora;
 export const CONTA_SERVICO = loja.CONTA_SERVICO;
