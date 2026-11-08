@@ -67,8 +67,10 @@ Se o documento pedido ao RH não existir, o achado vira pendência ou passivo.
 **O LLM decide o caminho; as ferramentas (regras determinísticas) decidem a verdade.**
 
 - O LLM roda em laço (LangGraph): escolhe a ferramenta, lê o resultado, decide o próximo passo, até "terminei" ou o limite de passos.
-- **O LLM nunca escreve o veredito.** Só `audita_linha` produz `irregular` / `risco` / `ok`. Afirmação de irregularidade que não veio dessa ferramenta não entra no relatório.
-- Um episódio por funcionário (o contexto não cresce sem controle).
+- **O LLM nunca escreve o veredito.** Só as regras (`audita_linha`, `audita_funcionario`, via `auditar_ficha`) produzem `irregular` / `risco` / `ok`. Afirmação de irregularidade que não veio delas não entra no relatório.
+- **O que o LLM decide (é por isso que é agente, não workflow):** o que investigar (`consulta_ca`, `historico_da_empresa`, `buscar_ca_proximo`), **se vale conferir a ficha de papel**, a **urgência** de cada correção (prazo de 1–2 dias para quem está sem proteção hoje) e o **texto da ação para o técnico**. Ficha limpa termina em ~2 passos; ficha suspeita é investigada.
+- **Objetivo do prompt (preventivo):** no histórico do funcionário (até 5 anos), descobrir o que precisa ser corrigido agora e dizer ao técnico o que fazer, até quando e por quê. O passivo vai para o relatório, não vira tarefa.
+- Um episódio por funcionário; até 3 funcionários em paralelo (`HEITOR_PARALELO`).
 
 ### Guarda-corpos
 - Limite de **12 passos por funcionário** e de tempo total.
@@ -77,6 +79,11 @@ Se o documento pedido ao RH não existir, o achado vira pendência ou passivo.
 - **Nenhuma ferramenta altera ficha.** O agente só lê, pede e confere.
 - Todo passo vira um `Evento` no log (ferramenta, entrada, saída, custo). O log é a prova de autonomia na demo.
 - Demo previsível: temperatura baixa, dataset fixo, vídeo de backup.
+- **Rede de segurança** no fim de cada funcionário: o que o LLM deixou para trás (linha sem auditar, falha sem pendência, foto sem conferir) é feito pelo código e aparece no log como "guarda-corpo". Com ou sem LLM, a auditoria acha **as mesmas falhas**.
+- **Nunca mandar retirar, recolher ou deixar de usar um EPI** (texto assim é trocado pela ação da regra). Nunca sugerir assinar/preencher ficha antiga.
+- **CA e data lidos nunca são trocados.** CA que não combina com o EPI (base CAEPI) e data impossível (antes da admissão ou no futuro) viram **conferência no papel**, com o provável e o motivo: pode ser erro de leitura ou de registro, e só o papel diz qual.
+- Tudo o que é dúvida de uma ficha vira **uma** pendência de conferência para o técnico; a mesma ação repetida vira uma pendência listando as linhas.
+- **LLM fora do ar:** timeout de 15 s por provedor; o funcionário segue em modo degradado (política determinística) e o próximo tenta de novo; depois de 2 seguidos, o agente desiste. O resultado traz `modo` (`llm` | `misto` | `deterministico`).
 
 ---
 
@@ -99,7 +106,8 @@ A Nota Técnica 146/2015 do MTE diz que o CA precisa ser válido na **data da co
 - No pitch, dizer **"critério adotado"**, nunca "a lei diz".
 
 ### Base CAEPI (MTE)
-- Arquivo `tgg_export_caepi.txt`, retrato de **16/07/2026**, 124.937 registros, 19 campos separados por `|`, UTF-8. Carrega inteira em memória, sem internet na demo.
+- **Base oficial do time (decidido em 07/11):** `dados/RelatorioCA_20261107_114519.csv` (pasta do Drive do Gustavo; fora do Git). Carregada por `heitor.dados.caepi`, inteira em memória, sem internet na demo. Regras e conferência CA × EPI usam a mesma base; sem ela, os testes que dependem dela são pulados e a conferência avisa no log que está desligada.
+- (Histórico: o export antigo `tgg_export_caepi.txt`, retrato de 16/07/2026, só é lido com `HEITOR_CAEPI=<caminho>`.)
 - Campos usados: 1 número do CA (chave), 2 data de validade (o mais importante), 3 situação (só dica), 6 razão social, 8 equipamento (categoria), 9 e 13 (texto livre, só evidência).
 - **Ignorar o rótulo VENCIDO/VÁLIDO** (vale para o dia do retrato). Comparar a data da ficha com a data de validade.
 - CANCELADO (190) e SUSPENSO (6) → pendência de revisão (a base não diz desde quando).
@@ -110,9 +118,10 @@ A Nota Técnica 146/2015 do MTE diz que o CA precisa ser válido na **data da co
 - Comparação de EPI **por categoria** (ex.: "qualquer protetor auditivo"), não por nome exato.
 
 ### CAs reais verificados para o dataset
-Capacete 29637 · botinas 9182 e 12844 · óculos 10344 · luva de raspa 21245 (vencida entre 29/04/2024 e 24/06/2024) · protetor auditivo 17664 · botina vencida 28499 (desde 02/10/2020).
+Capacete 29637 · botinas 9182 e 12844 · óculos 10344 · luva de raspa 21245 (vencida entre 29/04/2024 e 24/06/2024 segundo o ConsultaCA; **na base RelatorioCA de 07/11 aparece válida nesse período**) · protetor auditivo 17664 · botina vencida 28499 (desde 02/10/2020).
 
-### Tabela função → EPI (a preencher pelo Gustavo)
+### Tabela função → EPI (Gustavo; decidido: só ruído)
+Só ruído (NR-15, Anexos 1 e 2) por enquanto. Só "EPI exigido ausente" é falha; **EPI a mais não é falha** (a regra "EPI não exigido" foi removida: gerava falso positivo e quase fez o agente mandar retirar EPI).
 | Função | Agente nocivo | EPI exigido | Vida útil | Grau |
 |---|---|---|---|---|
 | Pedreiro | Ruído | Protetor auditivo | a definir | a definir |
@@ -138,28 +147,28 @@ heitor/
 
 As ferramentas do agente chamam funções Python diretamente. **Só a interface fala com a API por HTTP.** Até uma função ficar pronta, cada um usa um **stub com a mesma assinatura**.
 
-### Ferramentas do agente
-| Ferramenta | O que faz | Dono |
+### Ferramentas do agente (o que o LLM pode chamar)
+| Ferramenta | O que faz | Dono da regra por trás |
 |---|---|---|
-| `ler_fonte(fonte)` | Lê a planilha/pasta e devolve só linhas novas ou alteradas (hash por linha) | Pierre |
-| `mapear_colunas(cabecalho, amostra)` | Descobre qual coluna é data, EPI, CA, assinatura, funcionário, com confiança | Sofia |
-| `extrair_ficha(arquivo)` | Lê CSV ou foto e devolve as linhas com confiança por campo | Sofia |
-| `reextrair_campo(arquivo, linha, campo)` | Nova tentativa num campo de baixa confiança | Sofia |
-| `consulta_ca(numero, data)` | CA válido na data? (base CAEPI em memória) | Gustavo |
+| `auditar_ficha()` | Regras no histórico inteiro do funcionário; devolve as falhas em `corrigir_agora`, `depende_de_prova`, `passivo`, `conferir_no_papel`. **Fonte do veredito.** | Gustavo |
+| `conferir_ficha_de_papel()` | Confere na foto se cada entrega da planilha está assinada pelo funcionário; o agente decide quando usar (~25 s) | Sofia |
+| `historico_da_empresa(epi)` | CAs que a empresa usa para aquele tipo de EPI | Sofia |
+| `consulta_ca(numero, data)` | CA válido na data? | Gustavo |
 | `buscar_ca_proximo(numero)` | CAs com número parecido (sempre suposição) | Gustavo |
-| `exigencia_funcao(funcao)` | Agente nocivo, EPI exigido, vida útil, grau | Gustavo |
-| `audita_linha(linha, funcao) -> list[Achado]` | Aplica as regras; **único que produz veredito** | Gustavo |
-| `calcula_exposicao(achados)` | Exposição potencial máxima do passivo | Gustavo |
-| `criar_pendencia(achado, destino, acao, prazo)` | Grava a pendência e avisa (e-mail) o técnico ou o RH | Pierre |
-| `fechar_pendencia(pendencia, resultado)` | Fecha se a reauditoria confirmou, reabre se não | Pierre |
-| `gerar_relatorio(achados)` | Explica cada falha com a norma/súmula | Sofia |
+| `exigencia_funcao()` | Agente nocivo, EPI exigido, vida útil | Gustavo |
+| `audita_linha` / `audita_funcionario` | Reauditar uma linha ou a ficha inteira | Gustavo |
+| `criar_pendencia(achado_id, acao, prazo_dias)` | Pendência com a ação escrita pelo agente; o destino (técnico/RH) vem do tipo do achado | Pierre |
+| `reextrair_campo(linha, campo)` | Relê um campo de foto com baixa confiança | Sofia |
+| `terminei(resumo)` | Encerra o funcionário | — |
 
-Pedido de documento ao RH = pendência com `destino: "rh"` (não há ferramenta separada).
+Fora do LLM (código): `mapear_colunas` e `extrair_ficha` (planilha → `Linha`, Sofia), `conferencia_assinaturas` / `conferencia_ca` / `conferencia_datas` (Sofia), `audita_fora_da_planilha` (Gustavo), `calcula_exposicao` (Gustavo), `gerar_relatorio` (Sofia), `fechar_pendencia` (Pierre).
+
+Pedido de documento ao RH = pendência com `destino: "rh"` (nota fiscal da compra, lista de presença do treinamento). A conferência no papel vai sempre ao técnico.
 
 ### Funções que cruzam módulos
-- **Gustavo → Sofia:** `consulta_ca`, `buscar_ca_proximo`, `exigencia_funcao`, `audita_linha`, `calcula_exposicao`.
-- **Pierre → Sofia:** `criar_pendencia(achado, destino, acao, prazo)`.
-- **Sofia → Pierre:** `rodar_auditoria(auditoria_id, linhas, emitir_evento)` e `reauditar(pendencia_id, linhas)`.
+- **Gustavo → Sofia:** `consulta_ca`, `buscar_ca_proximo`, `exigencia_funcao`, `audita_linha` (lê `na_ficha`, `assinatura_tipo`, `assinatura_texto`), `audita_funcionario`, `audita_fora_da_planilha`, `calcula_exposicao(achados, funcoes=)`.
+- **Pierre → Sofia:** `criar_pendencia`, `fechar_pendencia`, `obter_pendencia`.
+- **Sofia → Pierre:** `rodar_auditoria(auditoria_id, linhas, emitir_evento, fotos=)`, `conferir_e_auditar(auditoria_id, linhas_da_planilha, {funcionario_id: foto}, emitir_evento)` e `reauditar(pendencia_id, linhas)`.
 
 ---
 
@@ -214,7 +223,8 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (não há ferramenta 
 
 **Fazer (núcleo que não cai):** auditoria → pendência enviada → reauditoria fechando a pendência.
 - Construtora fictícia com 3–4 funções (pedreiro, servente, carpinteiro, armador), fichas em planilha/CSV com problemas plantados e **CAs reais**.
-- Uma foto limpa do formulário impresso (um momento da demo).
+- **A foto confere a assinatura; os dados vêm da planilha** (decidido em 07/11: ler número manuscrito errava muito). O agente decide conferir a ficha de papel de quem tem foto; na planilha da demo, o Fábio (0310) e o Wagner (0313).
+- Regras novas, **sempre risco, nunca irregular:** `entrega_sem_ficha` (na planilha e não no papel) e `ficha_sem_planilha` (no papel e não na planilha).
 - Pendências com ação, motivo e prazo; pedido de nota fiscal/treinamento ao RH por e-mail.
 - Na demo, alguém do time adiciona a correção ao vivo e o agente fecha a pendência.
 - Exposição em R$ só para o passivo.
@@ -254,6 +264,13 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (não há ferramenta 
 - Universo: ~47 mil empresas (47.346) com mais de 30 empregados e grau de risco 3 ou 4, 7,3 milhões de empregados (estimativa da Prolife a partir do IBGE). Só como teto; não bate com "construtora pequena".
 - Casos: Bazan (TST, 5ª Turma, 2025, RR-10440-07.2015.5.15.0125: pensão vitalícia + R$ 35 mil, EPI danificado sem fiscalização); três casos do TRT3 trazidos pelo especialista.
 
+### Números do Heitor (medidos em 07/11; sempre citar com a amostra)
+- **Ficha de papel conferida contra a planilha** (89 entregas de 11 fichas impressas, gabaritos feitos à mão): nenhuma entrega sem assinatura passou como assinada (**6 de 6** pegas); **69 de 76** assinaturas válidas (91%) confirmadas automaticamente; **6 de 7** ambíguas (visto, "entregue", iniciais, nome de outra pessoa) barradas; **16%** das entregas foram para conferência humana. Entrega "isca" na planilha (que não existe no papel): nunca aceita como assinada.
+- **Eval do comportamento do agente** (`tests/eval_agente.py`, 7 funcionários da planilha da demo, 2 com foto): **16 de 16** comportamentos esperados em 3 rodadas seguidas (ficha limpa em 2 passos; prazo de 1 dia decidido pelo LLM para quem está sem proteção; nota fiscal ao RH; investigação de CA inexistente; o próprio LLM decide conferir o papel; nunca manda retirar EPI). ~80–115 s, ~US$ 0,02–0,03.
+- **Cobertura:** na planilha da demo (12 funcionários), os achados são **idênticos com e sem LLM** (8 = 8). O LLM decide o que fazer; as regras decidem o que é falha.
+- **Tempo e custo:** 12 funcionários em 70–130 s com o LLM (varia com o provedor), ~US$ 0,02 por auditoria. Na demo ao vivo, 2 funcionários: 15–40 s.
+- **Modelo de visão:** Qwen2.5-VL-72B, escolhido entre 7 modelos testados em 13 fotos; o detector YOLO de assinaturas foi descartado (marca qualquer letra cursiva).
+
 ### Seguro dizer / não dizer
 | Dizer | Não dizer |
 |---|---|
@@ -263,6 +280,8 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (não há ferramenta 
 | "Critério adotado" (regra do CA) | "A lei diz" |
 | "Encontra quem está sem EPI válido antes do acidente" | "Salvamos vidas" |
 | "Conforme a durabilidade indicada pelo fabricante" | "Deveria trocar todo mês" |
+| "Assinatura compatível com o nome do funcionário" | "Assinado pelo funcionário" (o Heitor não autentica assinatura) |
+| Número **com a amostra** ("6 de 6 em 89 entregas de 11 fichas") | Porcentagem solta ("98% de acerto") |
 
 ---
 
@@ -270,7 +289,9 @@ Pedido de documento ao RH = pendência com `destino: "rh"` (não há ferramenta 
 
 - [ ] Canal do aviso ao técnico: e-mail **ou** Telegram (só um).
 - [ ] Desafio Tako (DP) ou só trilha geral? O produto é SST/jurídico preventivo.
-- [ ] Tabela função → EPI das 4 funções.
+- [x] Tabela função → EPI: só ruído (NR-15, Anexos 1 e 2); EPI a mais não é falha.
+- [x] Base CAEPI: `RelatorioCA_20261107_114519.csv` em `dados/`.
+- [x] Foto: confere a assinatura contra a planilha (não é fonte de dados).
 - [ ] Quem gera o conjunto de teste independente (com sujeira).
 - [ ] Preço: resposta de 3–4 consultorias de SST (pagariam pela auditoria contínua? quanto por trabalhador?).
 - [ ] Langfuse ou log próprio (log próprio já atende).

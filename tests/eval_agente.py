@@ -56,6 +56,14 @@ def main() -> None:
     ref = rodar_auditoria("eval-ref", _linhas())
     ref_achados = {(a["funcionario_id"], a.get("linha"), a["regra"]) for a in ref["achados"]}
 
+    # A API reaproveita pendência aberta do mesmo problema vinda de outra auditoria (bom para o vigia);
+    # aqui isso faria a auditoria do agente receber as pendências da referência. Começa do zero.
+    try:
+        from heitor.api.estado import estado
+        estado.limpar()
+    except ImportError:
+        pass
+
     # 2) o agente de verdade, com LLM e com as fotos
     os.environ["HEITOR_LLM"] = "on"
     import importlib
@@ -87,7 +95,12 @@ def main() -> None:
     check("0401 ficha limpa", "não cria pendência", not pend["0401"], f"{len(pend['0401'])} pendências")
     urg = [p for p in pend["0406"] if date.fromisoformat(p["prazo"]) <= hoje + timedelta(days=2)]
     check("0406 sem proteção hoje", "pendência urgente (prazo ≤ 2 dias)", urg, f"prazos {[p['prazo'] for p in pend['0406']]}")
-    check("0406 sem proteção hoje", "urgência decidida pelo LLM", urg and passos_llm("0406") >= 2)
+    criadas_pelo_llm = [e for i, e in enumerate(ev["0406"]) if e.tipo == "ferramenta" and e.ferramenta == "criar_pendencia"
+                        and not (i and ev["0406"][i - 1].tipo == "decisao"
+                                 and str(ev["0406"][i - 1].saida.get("pensamento", "")).startswith("guarda-corpo"))]
+    check("0406 sem proteção hoje", "urgência decidida pelo LLM",
+          any(str(e.entrada.get("prazo_dias")) in ("1", "2") for e in criadas_pelo_llm),
+          f"prazo_dias do LLM: {[e.entrada.get('prazo_dias') for e in criadas_pelo_llm] or 'nenhuma criada pelo LLM'}")
     check("0402 CA vencido na entrega", "pede documento ao RH", any(p["destino"] == "rh" for p in pend["0402"]),
           f"destinos {[p['destino'] for p in pend['0402']]}")
     inv = INVESTIGACAO & set(ferramentas("0408"))

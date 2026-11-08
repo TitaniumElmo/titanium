@@ -172,6 +172,8 @@ def _t_buscar_ca_proximo(ctx: Contexto, args: dict) -> Resultado:
 
 GRUPO_CONFERIR_CA = "conferir_ca"
 REGRAS_PAPEL_X_PLANILHA = {"entrega_sem_ficha", "ficha_sem_planilha"}  # do Gustavo; sempre risco
+# Falhas que podem deixar o trabalhador sem proteção hoje: prazo padrão de 2 dias (o LLM pode pôr 1).
+REGRAS_SEM_PROTECAO = {"troca_atrasada", "epi_inadequado", "ca_cancelado"}
 REGRAS_DA_ASSINATURA = {"assinatura_ausente", "entrega_sem_ficha"}  # o que a conferência do papel reavalia
 
 
@@ -447,7 +449,8 @@ def criar_pendencia_validada(ctx: Contexto, achado: Achado, acao: Any = None, pr
     try:
         dias = max(1, min(30, int(prazo_dias)))
     except (TypeError, ValueError):
-        dias = 5
+        # Sem prazo informado: quem pode estar SEM PROTEÇÃO HOJE tem prazo curto por padrão (preventivo).
+        dias = 2 if achado.get("regra") in REGRAS_SEM_PROTECAO and achado.get("gravidade") != "ok" else 5
     prazo = (date.today() + timedelta(days=dias)).isoformat()
     p = IMPL["criar_pendencia"](achado, destino, acao, prazo)
     ctx.pendencias.append(p)
