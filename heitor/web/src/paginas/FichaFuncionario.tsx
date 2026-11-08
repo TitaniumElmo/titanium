@@ -1,0 +1,270 @@
+import { Link, useParams } from "react-router-dom";
+import { useAgora, useMundo } from "../api";
+import { Avatar } from "../componentes/Avatar";
+import { BotaoLink, EstadoVazio } from "../componentes/base";
+import { CartaoAchado } from "../componentes/CartaoAchado";
+import { CicloPendencia } from "../componentes/CicloPendencia";
+import { CartaoNumero } from "../componentes/ResumoHistorico";
+import { Pagina } from "../componentes/Pagina";
+import { SeloDestino, SeloGravidade, SeloStatus } from "../componentes/Selos";
+import { achadoAberto, resumoFuncionarios, statusPapel, trocasPrevistas, type StatusPapel } from "../derivados";
+import { data, dataCurta, isoDia, ROTULO_GRAVIDADE } from "../formato";
+import { cn, IconeAlerta, IconeCalendario, IconeDocumento, IconeLista, IconePessoas } from "../util";
+
+const ICONES_PAPEL: Record<StatusPapel, string | null> = {
+  conferido: "M5 13l4 4L19 7",
+  duvida: "M12 8v5M12 17h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z",
+  sem_assinatura: "M6 6l12 12M18 6L6 18",
+  nao_localizada: "M21 21l-4.3-4.3M11 18a7 7 0 100-14 7 7 0 000 14z",
+  nao_conferida: null,
+};
+
+const PAPEL: Record<StatusPapel, { rotulo: string; dica: string; classe: string }> = {
+  conferido: {
+    rotulo: "conferido com a ficha",
+    dica: "Assinatura compatível com o nome do funcionário",
+    classe: "border-ok-borda/40 bg-ok-fundo text-ok",
+  },
+  duvida: {
+    rotulo: "em dúvida",
+    dica: "A leitura da assinatura não foi conclusiva: vai para conferência humana",
+    classe: "border-risco-borda/40 bg-risco-fundo text-risco",
+  },
+  sem_assinatura: {
+    rotulo: "sem assinatura",
+    dica: "A entrega está na ficha de papel, mas sem assinatura",
+    classe: "border-irregular-borda/40 bg-irregular-fundo text-irregular",
+  },
+  nao_localizada: {
+    rotulo: "não está no papel",
+    dica: "Está na planilha e não foi localizada na ficha de papel",
+    classe: "border-risco-borda/40 bg-risco-fundo text-risco",
+  },
+  nao_conferida: { rotulo: "—", dica: "Sem foto da ficha de papel para conferir", classe: "border-transparent text-fraco" },
+};
+
+function SeloPapel({ status }: { status: StatusPapel }) {
+  const p = PAPEL[status];
+  const icone = ICONES_PAPEL[status];
+  return (
+    <span title={p.dica} className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-selo border px-2 py-0.5 text-xs font-medium sm:text-sm", p.classe)}>
+      {icone && (
+        <svg aria-hidden viewBox="0 0 24 24" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d={icone} />
+        </svg>
+      )}
+      {p.rotulo}
+    </span>
+  );
+}
+
+export function FichaFuncionario() {
+  const { id } = useParams();
+  const mundo = useMundo();
+  const hoje = isoDia(useAgora(60_000));
+  const resumo = resumoFuncionarios(mundo, hoje).find((f) => f.funcionario_id === id);
+
+  if (!resumo) {
+    return (
+      <Pagina titulo="Funcionário">
+        <EstadoVazio
+          icone={IconePessoas}
+          titulo="Funcionário não encontrado"
+          acao={<BotaoLink para="/funcionarios">Voltar para a lista</BotaoLink>}
+        />
+      </Pagina>
+    );
+  }
+
+  const linhas = mundo.linhas.filter((l) => l.funcionario_id === id).sort((a, b) => a.linha - b.linha);
+  const achados = mundo.achados.filter((a) => a.funcionario_id === id);
+  const pendencias = mundo.pendencias.filter((p) => p.funcionario_id === id);
+  const trocas = trocasPrevistas(linhas).filter((t) => t.ultima >= isoDia(new Date(`${hoje}T12:00:00`).getTime() - 365 * 86_400_000));
+  const achadoDaLinha = (n: number) => achados.find((a) => a.linha === n);
+  const foraDaPlanilha = mundo.fora_da_planilha.filter((f) => f.funcionario_id === id);
+  const conferidas = linhas.filter((l) => statusPapel(l) !== "nao_conferida");
+  const contaPapel = (s: StatusPapel) => conferidas.filter((l) => statusPapel(l) === s).length;
+  const primeiroNome = resumo.nome.split(" ")[0] ?? resumo.nome;
+  const abertas = pendencias
+    .filter((p) => p.status !== "fechada")
+    .sort((x, y) => x.prazo.localeCompare(y.prazo));
+
+  return (
+    <Pagina titulo={resumo.nome} descricao={`${resumo.funcao} · matrícula ${resumo.funcionario_id}`}>
+      <Link to="/funcionarios" className="-mt-3 self-start text-label text-apoio hover:text-texto">
+        ← todos os funcionários
+      </Link>
+
+      <section className="flex flex-col gap-4 rounded-cartao border border-borda bg-superficie bg-[radial-gradient(120%_90%_at_100%_0%,var(--cartao-brilho),transparent_60%)] p-4 sm:flex-row sm:items-start sm:p-6">
+        <Avatar nome={resumo.nome} tamanho="lg" />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-semibold sm:text-lg">O que falta para {primeiroNome}</h2>
+          {abertas.length === 0 ? (
+            <p className="mt-1 text-sm text-apoio sm:text-base">Tudo em dia. Nenhuma pendência aberta para {primeiroNome}.</p>
+          ) : (
+            <ul className="mt-2 flex flex-col gap-1.5 text-sm sm:text-base">
+              {abertas.slice(0, 3).map((p) => (
+                <li key={p.id} className="flex gap-2">
+                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-acento" aria-hidden />
+                  <span>
+                    {p.acao.charAt(0).toUpperCase() + p.acao.slice(1)}{" "}
+                    <span className={cn("text-apoio", p.prazo < hoje && "text-irregular")}>
+                      ({p.destino === "rh" ? "RH" : "técnico"}, {p.prazo < hoje ? "venceu " : "até "}
+                      {dataCurta(p.prazo)})
+                    </span>
+                  </span>
+                </li>
+              ))}
+              {abertas.length > 3 && <li className="text-apoio">e mais {abertas.length - 3}</li>}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <section aria-label="Resumo da ficha" className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+        <CartaoNumero
+          rotulo="Status geral"
+          valor={ROTULO_GRAVIDADE[resumo.status]}
+          detalhe="o pior entre os achados em aberto"
+          urgente={resumo.status === "irregular"}
+          icone={<IconeAlerta className="size-full" />}
+        />
+        <CartaoNumero rotulo="Achados abertos" valor={resumo.achados_abertos} detalhe="lacunas na prova" icone={<IconeLista className="size-full" />} />
+        <CartaoNumero rotulo="Pendências abertas" valor={resumo.pendencias_abertas} detalhe="esperando correção" icone={<IconeDocumento className="size-full" />} />
+        <CartaoNumero
+          rotulo="Próxima troca"
+          valor={resumo.proxima_troca ? dataCurta(resumo.proxima_troca) : "—"}
+          detalhe={resumo.proxima_troca && resumo.proxima_troca < hoje ? "já passou da vida útil" : "conforme o fabricante"}
+          urgente={Boolean(resumo.proxima_troca && resumo.proxima_troca < hoje)}
+          icone={<IconeCalendario className="size-full" />}
+        />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold">Linhas da ficha</h2>
+        <div className="overflow-x-auto rounded-cartao border border-borda bg-superficie bg-[radial-gradient(120%_90%_at_100%_0%,var(--cartao-brilho),transparent_60%)]">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="bg-superficie-2/60 text-left text-sm font-medium text-apoio">
+              <tr>
+                <th className="px-3 py-2 text-right font-medium">Linha</th>
+                <th className="px-3 py-2 font-medium">Data</th>
+                <th className="px-3 py-2 font-medium">EPI</th>
+                <th className="px-3 py-2 font-medium">CA</th>
+                <th className="px-3 py-2 text-right font-medium">Qtd</th>
+                <th className="px-3 py-2 font-medium">Assinatura</th>
+                <th className="px-3 py-2 font-medium">Ficha de papel</th>
+                <th className="px-3 py-2 font-medium">Achado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((l) => {
+                const achado = achadoDaLinha(l.linha);
+                return (
+                  <tr key={l.linha} className="border-t border-borda">
+                    <td className="px-3 py-2 text-right font-mono text-xs text-fraco">{l.linha}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{data(l.data)}</td>
+                    <td className="px-3 py-2">{l.epi}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{l.ca ?? <span className="text-risco">vazio</span>}</td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">{l.qtd}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {l.assinatura === null ? (
+                        <span className="text-fraco">—</span>
+                      ) : l.assinatura ? (
+                        <span className="text-apoio">sim</span>
+                      ) : (
+                        <span className="text-irregular">não</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <SeloPapel status={statusPapel(l)} />
+                    </td>
+                    <td className="px-3 py-2">{achado && <SeloGravidade gravidade={achado.gravidade} />}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-fraco">
+          Somente leitura. O agente nunca altera a ficha.
+          {conferidas.length > 0 &&
+            ` Ficha de papel: ${contaPapel("conferido")} de ${conferidas.length} entregas com assinatura compatível com o nome do funcionário, ${contaPapel("duvida")} em dúvida, ${contaPapel("sem_assinatura")} sem assinatura, ${contaPapel("nao_localizada")} não localizada no papel.`}
+        </p>
+        {foraDaPlanilha.length > 0 && (
+          <div className="rounded-cartao border border-risco-borda/40 bg-risco-fundo p-4">
+            <h3 className="text-label text-risco">Entregas só na ficha de papel</h3>
+            <p className="mt-0.5 text-xs text-apoio">Entregas que estão no papel e não aparecem na planilha. Achado de risco: lançar na planilha se a entrega aconteceu.</p>
+            <ul className="mt-2 flex flex-col gap-1">
+              {foraDaPlanilha.map((f) => (
+                <li key={`${f.data}-${f.epi}`} className="flex gap-3 text-sm">
+                  <span className="font-mono text-xs">{data(f.data)}</span>
+                  <span>{f.epi}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="flex flex-col gap-2">
+          <h2 className="text-base font-semibold">Achados</h2>
+          {achados.length === 0 ? (
+            <p className="rounded-cartao border border-dashed border-borda px-4 py-6 text-center text-sm text-fraco">Nenhuma lacuna na ficha.</p>
+          ) : (
+            achados.map((a) => (
+              <CartaoAchado
+                key={a.id}
+                achado={a}
+                pendencia={mundo.pendencias.find((p) => p.achado_id === a.id)}
+                className={cn(!achadoAberto(a, mundo.pendencias) && "opacity-60")}
+              />
+            ))
+          )}
+        </section>
+
+        <div className="flex flex-col gap-6">
+          <section className="flex flex-col gap-2">
+            <h2 className="text-base font-semibold">Pendências</h2>
+            {pendencias.length === 0 ? (
+              <p className="rounded-cartao border border-dashed border-borda px-4 py-6 text-center text-sm text-fraco">Nenhuma pendência.</p>
+            ) : (
+              pendencias.map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/pendencias?p=${p.id}`}
+                  className="flex flex-col gap-2 rounded-cartao border border-borda bg-superficie bg-[radial-gradient(120%_90%_at_100%_0%,var(--cartao-brilho),transparent_60%)] p-4 transition-colors hover:border-fraco sm:p-5"
+                >
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-fraco">{p.id}</span>
+                    <SeloStatus status={p.status} />
+                    <SeloDestino destino={p.destino} />
+                    <span className="ml-auto font-mono text-xs text-apoio">até {dataCurta(p.prazo)}</span>
+                  </span>
+                  <span className="text-sm sm:text-base">{p.acao}</span>
+                  <CicloPendencia modo="compacto" pendencia={p} />
+                </Link>
+              ))
+            )}
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-base font-semibold">Próximas trocas</h2>
+            <ul className="rounded-cartao border border-borda bg-superficie">
+              {trocas.map((t) => (
+                <li key={t.epi} className="flex items-center justify-between gap-3 border-t border-borda px-4 py-2.5 text-sm first:border-t-0">
+                  <span>{t.epi}</span>
+                  <span className={cn("font-mono text-xs", t.vence < hoje ? "text-irregular" : "text-apoio")}>
+                    {t.vence < hoje ? "venceu " : ""}
+                    {data(t.vence)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-fraco">Conforme a durabilidade indicada pelo fabricante.</p>
+          </section>
+        </div>
+      </div>
+    </Pagina>
+  );
+}
