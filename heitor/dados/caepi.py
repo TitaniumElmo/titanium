@@ -179,6 +179,24 @@ def consulta_ca(numero, data):
     }
 
 
+def validade_do_ca(numero):
+    chave = str(numero).strip()
+    linhas = base_padrao()["grupos"].get(chave)
+    if not linhas:
+        return {"numero": numero, "encontrado": False, "motivo": "CA nao existe na base"}
+    r = resolver_ca(linhas)
+    situacao = r["registro"]["SITUACAO"].strip()
+    return {
+        "numero": numero,
+        "encontrado": True,
+        "validade": r["validade"].isoformat(),
+        "situacao": situacao,
+        "situacao_invalida": situacao.upper() in SITUACOES_INVALIDAS,
+        "equipamento": r["equipamento"],
+        "conflito": r["conflito"],
+    }
+
+
 MAX_SUGESTOES = 5
 DISTANCIA_MAXIMA = 2
 
